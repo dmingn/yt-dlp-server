@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        SETUPTOOLS_SCM_PRETEND_VERSION: ${SETUPTOOLS_SCM_PRETEND_VERSION:-0.0.0}
+    image: yt-dlp-server:latest
+    pull_policy: build
+    user: "1000:1000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./out:/out"
+    environment:
+      N_WORKERS: "1"
+      OUTPUT_DIR: "/out"

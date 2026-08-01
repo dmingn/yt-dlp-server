@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yt-dlp-server</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f4f1;
+        --fg: #1c1b19;
+        --muted: #5c574f;
+        --border: #cfc8bc;
+        --accent: #0b6e4f;
+        --danger: #8b2e2e;
+        --panel: #fffdf9;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161513;
+          --fg: #f3efe7;
+          --muted: #b0a99c;
+          --border: #3a362f;
+          --accent: #5dcaa0;
+          --danger: #e28b8b;
+          --panel: #1f1d1a;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.45;
+      }
+      main {
+        max-width: 52rem;
+        margin: 0 auto;
+        padding: 1.5rem 1rem 3rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 0.25rem;
+      }
+      h1 .version {
+        color: var(--muted);
+        font-size: 0.85rem;
+        font-weight: 500;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 1.25rem;
+        font-size: 0.95rem;
+      }
+      form {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+      input[type="url"] {
+        flex: 1;
+        min-width: 0;
+        padding: 0.7rem 0.8rem;
+        border: 1px solid var(--border);
+        border-radius: 0.4rem;
+        background: var(--panel);
+        color: var(--fg);
+        font: inherit;
+      }
+      button {
+        padding: 0.7rem 1rem;
+        border: 0;
+        border-radius: 0.4rem;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .error {
+        color: var(--danger);
+        margin: -0.75rem 0 1rem;
+        font-size: 0.9rem;
+      }
+      .jobs {
+        display: grid;
+        gap: 0.75rem;
+      }
+      article {
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        background: var(--panel);
+        padding: 0.85rem 1rem;
+      }
+      article.selected {
+        outline: 2px solid var(--accent);
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: baseline;
+      }
+      .url {
+        word-break: break-all;
+        font-weight: 600;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-top: 0.35rem;
+      }
+      .status {
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid var(--border);
+        padding: 0.35rem 0.65rem;
+        font-size: 0.8rem;
+      }
+      .log-header {
+        display: flex;
+        justify-content: flex-end;
+        margin: 0.75rem 0 0;
+      }
+      pre {
+        margin: 0.35rem 0 0;
+        padding: 0.75rem;
+        border-radius: 0.35rem;
+        background: color-mix(in srgb, var(--fg) 6%, transparent);
+        overflow: auto;
+        max-height: 18rem;
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+      }
+      .empty {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>yt-dlp-server <span class="version">__VERSION__</span></h1>
+      <p class="sub">
+        Paste a video URL to download with the server’s fixed yt-dlp settings.
+      </p>
+      <form id="submit-form">
+        <input
+          id="url-input"
+          type="url"
+          name="url"
+          placeholder="https://..."
+          required
+          autocomplete="off"
+        />
+        <button type="submit" id="submit-btn">Download</button>
+      </form>
+      <p id="form-error" class="error" hidden></p>
+      <section id="jobs" class="jobs" aria-live="polite"></section>
+    </main>
+    <script>
+      const form = document.getElementById("submit-form");
+      const urlInput = document.getElementById("url-input");
+      const submitBtn = document.getElementById("submit-btn");
+      const formError = document.getElementById("form-error");
+      const jobsEl = document.getElementById("jobs");
+      let selectedId = null;
+      let selectedDetail = null;
+
+      function showError(message) {
+        formError.hidden = !message;
+        formError.textContent = message || "";
+      }
+
+      function formatTime(iso) {
+        if (!iso) return "—";
+        return new Date(iso).toLocaleString();
+      }
+
+      async function refreshJobs() {
+        const res = await fetch("/api/jobs");
+        if (!res.ok) throw new Error("Failed to load jobs");
+        const jobs = await res.json();
+        if (selectedId) {
+          const detailRes = await fetch(`/api/jobs/${selectedId}`);
+          selectedDetail = detailRes.ok ? await detailRes.json() : null;
+          if (!selectedDetail) selectedId = null;
+        }
+        renderJobs(jobs);
+      }
+
+      function renderJobs(jobs) {
+        if (!jobs.length) {
+          jobsEl.innerHTML = '<p class="empty">No jobs yet.</p>';
+          return;
+        }
+        jobsEl.innerHTML = "";
+        for (const job of jobs) {
+          const article = document.createElement("article");
+          if (job.id === selectedId) article.classList.add("selected");
+          article.tabIndex = 0;
+          article.innerHTML = `
+            <div class="row">
+              <div class="url">${escapeHtml(job.url)}</div>
+              <div class="status">${escapeHtml(job.status)}</div>
+            </div>
+            <div class="meta">
+              created ${formatTime(job.created_at)}
+              · logs ${job.log_line_count}
+              ${job.error ? " · " + escapeHtml(job.error) : ""}
+            </div>
+          `;
+          if (job.id === selectedId && selectedDetail) {
+            const logText =
+              (selectedDetail.log?.lines || []).join("") ||
+              "(no log output yet)";
+            const logHeader = document.createElement("div");
+            logHeader.className = "log-header";
+            const copyBtn = document.createElement("button");
+            copyBtn.type = "button";
+            copyBtn.className = "secondary";
+            copyBtn.textContent = "Copy log";
+            copyBtn.addEventListener("click", async (event) => {
+              event.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(logText);
+                copyBtn.textContent = "Copied";
+                setTimeout(() => {
+                  copyBtn.textContent = "Copy log";
+                }, 1500);
+              } catch {
+                copyBtn.textContent = "Copy failed";
+                setTimeout(() => {
+                  copyBtn.textContent = "Copy log";
+                }, 1500);
+              }
+            });
+            logHeader.appendChild(copyBtn);
+            const pre = document.createElement("pre");
+            pre.textContent = logText;
+            article.appendChild(logHeader);
+            article.appendChild(pre);
+          }
+          article.addEventListener("click", () => selectJob(job.id));
+          article.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectJob(job.id);
+            }
+          });
+          jobsEl.appendChild(article);
+        }
+      }
+
+      async function selectJob(id) {
+        selectedId = selectedId === id ? null : id;
+        selectedDetail = null;
+        await refreshJobs();
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showError("");
+        submitBtn.disabled = true;
+        try {
+          const res = await fetch("/api/jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: urlInput.value.trim() }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            const detail =
+              body && body.detail
+                ? typeof body.detail === "string"
+                  ? body.detail
+                  : "Invalid URL"
+                : `Request failed (${res.status})`;
+            throw new Error(detail);
+          }
+          const job = await res.json();
+          selectedId = job.id;
+          urlInput.value = "";
+          await refreshJobs();
+        } catch (err) {
+          showError(err.message || String(err));
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      refreshJobs().catch((err) => showError(err.message || String(err)));
+      setInterval(() => {
+        refreshJobs().catch(() => {});
+      }, 2000);
+    </script>
+  </body>
+</html>
