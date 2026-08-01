@@ -908,7 +908,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "pydantic-settings", specifier = ">=2.7.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.0" },
-    { name = "yt-dlp", extras = ["default", "deno"], specifier = ">=2025.8.11" },
+    { name = "yt-dlp", extras = ["default", "deno"], specifier = ">=2026.7.4" },
 ]
 
 [package.metadata.requires-dev]
