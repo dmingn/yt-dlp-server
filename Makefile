@@ -13,6 +13,12 @@ docker-smoke:
 	docker run --rm $$platform_flag --entrypoint ffprobe "$(IMAGE)" -version >/dev/null; \
 	docker run --rm $$platform_flag --entrypoint yt-dlp "$(IMAGE)" --version >/dev/null; \
 	docker run --rm $$platform_flag --entrypoint deno "$(IMAGE)" --version >/dev/null; \
+	pkg_ver=$$(docker run --rm $$platform_flag --entrypoint python "$(IMAGE)" -c "from importlib.metadata import version; print(version('yt-dlp-server'))"); \
+	echo "package version: $$pkg_ver"; \
+	if [ -n "$(EXPECTED_VERSION)" ] && [ "$$pkg_ver" != "$(EXPECTED_VERSION)" ]; then \
+		echo "ERROR: expected package version $(EXPECTED_VERSION), got $$pkg_ver" >&2; \
+		exit 1; \
+	fi; \
 	echo "OK"
 
 .PHONY: docker-build-smoke
