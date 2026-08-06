@@ -52,6 +52,10 @@ lint:
 typecheck:
 	uv run mypy .
 
+.PHONY: playwright-install
+playwright-install:
+	uv run playwright install --with-deps chromium
+
 .PHONY: test
 test:
 	uv run python -m pytest -q

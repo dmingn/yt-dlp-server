@@ -32,5 +32,6 @@ OUTPUT_DIR=./out uv run python -m yt_dlp_server
 ```
 
 ```bash
+make playwright-install  # once, for UI tests
 make check
 ```
