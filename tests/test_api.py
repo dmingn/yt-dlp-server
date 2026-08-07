@@ -20,7 +20,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
 def test_create_job_rejects_invalid_url(client: TestClient) -> None:
     # Act
-    response = client.post("/api/jobs", json={"url": "not-a-url"})
+    response = client.post("/api/createJob", json={"url": "not-a-url"})
 
     # Assert
     assert response.status_code == 422
@@ -42,7 +42,7 @@ def test_index_shows_package_version(client: TestClient) -> None:
 def test_create_job_returns_201(client: TestClient) -> None:
     # Act
     response = client.post(
-        "/api/jobs",
+        "/api/createJob",
         json={"url": "https://example.com/video"},
     )
 
@@ -56,13 +56,13 @@ def test_create_job_returns_201(client: TestClient) -> None:
 def test_created_job_appears_in_list(client: TestClient) -> None:
     # Arrange
     created = client.post(
-        "/api/jobs",
+        "/api/createJob",
         json={"url": "https://example.com/video"},
     )
     job_id = created.json()["id"]
 
     # Act
-    listed = client.get("/api/jobs")
+    listed = client.post("/api/listJobs", json={})
 
     # Assert
     assert listed.status_code == 200
@@ -73,13 +73,13 @@ def test_created_job_appears_in_list(client: TestClient) -> None:
 def test_get_job_returns_detail(client: TestClient) -> None:
     # Arrange
     created = client.post(
-        "/api/jobs",
+        "/api/createJob",
         json={"url": "https://example.com/video"},
     )
     job_id = created.json()["id"]
 
     # Act
-    detail = client.get(f"/api/jobs/{job_id}")
+    detail = client.post("/api/getJob", json={"id": job_id})
 
     # Assert
     assert detail.status_code == 200
@@ -88,7 +88,7 @@ def test_get_job_returns_detail(client: TestClient) -> None:
 
 def test_get_job_returns_404_for_unknown_id(client: TestClient) -> None:
     # Act
-    response = client.get("/api/jobs/does-not-exist")
+    response = client.post("/api/getJob", json={"id": "does-not-exist"})
 
     # Assert
     assert response.status_code == 404
@@ -105,14 +105,14 @@ def test_create_job_returns_503_when_at_capacity(
     app = create_app(Settings(n_workers=1, max_jobs=1))
     with TestClient(app) as client:
         first = client.post(
-            "/api/jobs",
+            "/api/createJob",
             json={"url": "https://example.com/1"},
         )
         assert first.status_code == 201
 
         # Act
         second = client.post(
-            "/api/jobs",
+            "/api/createJob",
             json={"url": "https://example.com/2"},
         )
 

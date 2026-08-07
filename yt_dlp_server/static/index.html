@@ -190,11 +190,19 @@
       }
 
       async function refreshJobs() {
-        const res = await fetch("/api/jobs");
+        const res = await fetch("/api/listJobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
         if (!res.ok) throw new Error("Failed to load jobs");
         const jobs = await res.json();
         if (selectedId) {
-          const detailRes = await fetch(`/api/jobs/${selectedId}`);
+          const detailRes = await fetch("/api/getJob", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: selectedId }),
+          });
           selectedDetail = detailRes.ok ? await detailRes.json() : null;
           if (!selectedDetail) selectedId = null;
         }
@@ -283,7 +291,7 @@
         showError("");
         submitBtn.disabled = true;
         try {
-          const res = await fetch("/api/jobs", {
+          const res = await fetch("/api/createJob", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url: urlInput.value.trim() }),
