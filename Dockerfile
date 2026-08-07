@@ -38,9 +38,9 @@ RUN groupadd -g 1000 appgroup && \
 
 WORKDIR /workdir
 
-COPY --from=ffmpeg-downloader /workdir/ffmpeg/bin /usr/local/bin
+COPY --from=ffmpeg-downloader --chown=appuser:appgroup /workdir/ffmpeg/bin /usr/local/bin
 
-COPY --from=builder /workdir/.venv /workdir/.venv
+COPY --from=builder --chown=appuser:appgroup /workdir/.venv /workdir/.venv
 
 ENV PATH="/workdir/.venv/bin:$PATH"
 
