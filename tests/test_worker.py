@@ -6,7 +6,7 @@ import pytest
 
 from yt_dlp_server.job_service import JobService
 from yt_dlp_server.job_store import JobStore
-from yt_dlp_server.models import FailedJob, JobStatus, SucceededJob
+from yt_dlp_server.models import CancelledJob, FailedJob, JobStatus, SucceededJob
 from yt_dlp_server.worker import process_job
 
 
@@ -150,7 +150,7 @@ async def test_process_job_marks_failed_on_nonzero_exit(
 
 
 @pytest.mark.asyncio
-async def test_process_job_cancelled_kills_and_marks_failed(
+async def test_process_job_cancelled_kills_and_marks_cancelled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
@@ -174,15 +174,57 @@ async def test_process_job_cancelled_kills_and_marks_failed(
     )
 
     task = asyncio.create_task(process_job(jobs, job.id, output_dir="/out"))
+    jobs.set_running_task(job.id, task)
     await started.wait()
 
     # Act
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+    jobs.clear_running_task(job.id)
 
     # Assert
     finished = jobs.get(job.id)
-    assert isinstance(finished, FailedJob)
-    assert finished.error == "cancelled"
+    assert isinstance(finished, CancelledJob)
+    assert finished.status == JobStatus.cancelled
     assert proc.killed
+
+
+@pytest.mark.asyncio
+async def test_cancel_running_job_via_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    jobs = _make_jobs()
+    job = jobs.enqueue("https://example.com/video")
+    await jobs.claim_next()
+
+    started = asyncio.Event()
+    proc = _BlockingProc(started)
+
+    async def fake_create_subprocess_exec(
+        *cmd: str,
+        stdout: Any = None,
+        stderr: Any = None,
+    ) -> _BlockingProc:
+        return proc
+
+    monkeypatch.setattr(
+        "yt_dlp_server.worker.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    task = asyncio.create_task(process_job(jobs, job.id, output_dir="/out"))
+    jobs.set_running_task(job.id, task)
+    await started.wait()
+
+    # Act
+    cancelled = await jobs.cancel(job.id)
+    jobs.clear_running_task(job.id)
+
+    # Assert
+    assert cancelled is not None
+    assert cancelled.status == JobStatus.cancelled
+    assert isinstance(jobs.get(job.id), CancelledJob)
+    assert proc.killed
+    assert task.done()

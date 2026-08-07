@@ -58,7 +58,7 @@ async def process_job(
                 exit_code=exit_code,
             )
     except asyncio.CancelledError:
-        jobs.mark_failed(job_id, error="cancelled")
+        jobs.mark_cancelled(job_id)
         raise
     except Exception as exc:
         jobs.mark_failed(job_id, error=f"{type(exc).__name__}: {exc}")
@@ -73,11 +73,22 @@ async def worker(
 ) -> None:
     while True:
         job_id = await jobs.claim_next()
-        try:
-            await process_job(
+        task = asyncio.create_task(
+            process_job(
                 jobs,
                 job_id,
                 output_dir=output_dir,
-            )
+            ),
+            name=f"job-{job_id}",
+        )
+        jobs.set_running_task(job_id, task)
+        try:
+            # wait() does not re-raise CancelledError from the job task,
+            # so a single-job cancel does not tear down the worker loop.
+            await asyncio.wait({task})
         finally:
+            jobs.clear_running_task(job_id)
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
             jobs.task_done()

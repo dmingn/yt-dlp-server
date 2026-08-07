@@ -10,6 +10,7 @@ class JobStatus(str, Enum):
     running = "running"
     succeeded = "succeeded"
     failed = "failed"
+    cancelled = "cancelled"
 
 
 class JobLog(BaseModel):
@@ -46,6 +47,15 @@ class QueuedJob(_JobBase):
             url=self.url,
             created_at=self.created_at,
             started_at=started_at,
+            log=JobLog(max_lines=max_log_lines),
+        )
+
+    def cancel(self, *, finished_at: datetime, max_log_lines: int) -> CancelledJob:
+        return CancelledJob(
+            id=self.id,
+            url=self.url,
+            created_at=self.created_at,
+            finished_at=finished_at,
             log=JobLog(max_lines=max_log_lines),
         )
 
@@ -87,6 +97,16 @@ class RunningJob(_JobBase):
             error=error,
         )
 
+    def cancel(self, *, finished_at: datetime) -> CancelledJob:
+        return CancelledJob(
+            id=self.id,
+            url=self.url,
+            created_at=self.created_at,
+            started_at=self.started_at,
+            finished_at=finished_at,
+            log=self.log,
+        )
+
 
 class SucceededJob(_JobBase):
     status: Literal[JobStatus.succeeded] = JobStatus.succeeded
@@ -105,10 +125,20 @@ class FailedJob(_JobBase):
     error: str
 
 
+class CancelledJob(_JobBase):
+    status: Literal[JobStatus.cancelled] = JobStatus.cancelled
+    started_at: datetime | None = None
+    finished_at: datetime
+    log: JobLog
+
+
 Job = Annotated[
-    QueuedJob | RunningJob | SucceededJob | FailedJob,
+    QueuedJob | RunningJob | SucceededJob | FailedJob | CancelledJob,
     Field(discriminator="status"),
 ]
+
+UnfinishedJob = QueuedJob | RunningJob
+FinishedJob = SucceededJob | FailedJob | CancelledJob
 
 
 class CreateJobRequest(BaseModel):
@@ -116,6 +146,10 @@ class CreateJobRequest(BaseModel):
 
 
 class GetJobRequest(BaseModel):
+    id: str
+
+
+class CancelJobRequest(BaseModel):
     id: str
 
 
@@ -171,5 +205,15 @@ class JobSummary(BaseModel):
                 exit_code=job.exit_code,
                 log_line_count=len(job.log),
                 error=job.error,
+            )
+        if isinstance(job, CancelledJob):
+            return cls(
+                id=job.id,
+                url=job.url,
+                status=job.status,
+                created_at=job.created_at,
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+                log_line_count=len(job.log),
             )
         assert_never(job)

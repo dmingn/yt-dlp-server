@@ -1,4 +1,4 @@
-from yt_dlp_server.models import FailedJob, Job, QueuedJob, RunningJob, SucceededJob
+from yt_dlp_server.models import FinishedJob, Job, UnfinishedJob
 
 
 class JobStore:
@@ -27,16 +27,12 @@ class JobStore:
         )
 
     def unfinished_count(self) -> int:
-        return sum(
-            1 for job in self._jobs.values() if isinstance(job, (QueuedJob, RunningJob))
-        )
+        return sum(1 for job in self._jobs.values() if isinstance(job, UnfinishedJob))
 
     def _evict(self) -> None:
         while len(self._jobs) > self._max_jobs:
             finished = [
-                job
-                for job in self._jobs.values()
-                if isinstance(job, (SucceededJob, FailedJob))
+                job for job in self._jobs.values() if isinstance(job, FinishedJob)
             ]
             if not finished:
                 break
