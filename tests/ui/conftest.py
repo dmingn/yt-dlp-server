@@ -15,9 +15,7 @@ from yt_dlp_server.settings import Settings
 
 
 class LiveServerFactory(Protocol):
-    def __call__(
-        self, *, block_seconds: int = 0
-    ) -> AbstractContextManager[str]: ...
+    def __call__(self, *, block_seconds: int = 0) -> AbstractContextManager[str]: ...
 
 
 def _free_port() -> int:
