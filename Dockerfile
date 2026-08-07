@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir uv && \
 
 COPY yt_dlp_server ./yt_dlp_server
 
-RUN uv sync --locked --no-dev
+RUN uv sync --locked --no-dev --no-editable
 
 FROM alpine:latest AS ffmpeg-downloader
 
@@ -42,8 +42,6 @@ WORKDIR /workdir
 COPY --from=ffmpeg-downloader /workdir/ffmpeg/bin /usr/local/bin
 
 COPY --from=builder /workdir/.venv /workdir/.venv
-
-COPY yt_dlp_server ./yt_dlp_server
 
 ENV PATH="/workdir/.venv/bin:$PATH"
 
