@@ -26,6 +26,15 @@ def test_create_job_rejects_invalid_url(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_health_returns_ok(client: TestClient) -> None:
+    # Act
+    response = client.get("/health")
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_index_shows_package_version(client: TestClient) -> None:
     # Arrange
     from yt_dlp_server.version import get_version

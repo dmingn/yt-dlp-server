@@ -50,6 +50,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.include_router(api_router)
 
+    @app.get("/health")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
     @app.get("/")
     async def index() -> HTMLResponse:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
