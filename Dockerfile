@@ -1,4 +1,4 @@
-FROM python:3.14-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
 
 WORKDIR /workdir
 
@@ -7,8 +7,7 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 
 COPY pyproject.toml uv.lock ./
 
-RUN pip install --no-cache-dir uv && \
-    uv sync --locked --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-install-project
 
 COPY yt_dlp_server ./yt_dlp_server
 
