@@ -111,8 +111,12 @@ Job = Annotated[
 ]
 
 
-class JobCreate(BaseModel):
+class CreateJobRequest(BaseModel):
     url: AnyHttpUrl
+
+
+class GetJobRequest(BaseModel):
+    id: str
 
 
 class JobSummary(BaseModel):
