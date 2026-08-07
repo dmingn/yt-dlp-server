@@ -1,48 +1,68 @@
 from playwright.sync_api import Page, expect
 
 
-def test_index_shows_empty_jobs(page: Page, live_server_url: str) -> None:
+def test_index_shows_empty_jobs(page: Page, live_server) -> None:
     # Act
-    page.goto(live_server_url)
+    with live_server() as url:
+        page.goto(url)
 
-    # Assert
-    expect(page.get_by_role("heading", name="yt-dlp-server")).to_be_visible()
-    expect(page.locator("#url-input")).to_be_visible()
-    expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
-
-
-def test_submit_job_shows_selected_job_with_log(
-    page: Page, live_server_url: str
-) -> None:
-    # Arrange
-    page.goto(live_server_url)
-
-    # Act
-    page.locator("#url-input").fill("https://example.com/video")
-    page.locator("#submit-btn").click()
-
-    # Assert
-    expect(page.locator("#url-input")).to_have_value("")
-    article = page.locator("#jobs article.selected")
-    expect(article).to_be_visible()
-    expect(article).to_contain_text("https://example.com/video")
-    expect(article.locator(".status")).to_be_visible()
-    expect(article.get_by_role("button", name="Copy log")).to_be_visible()
-    expect(article.locator("pre")).to_be_visible()
+        # Assert
+        expect(page.get_by_role("heading", name="yt-dlp-server")).to_be_visible()
+        expect(page.locator("#url-input")).to_be_visible()
+        expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
 
 
-def test_submit_invalid_url_shows_form_error(page: Page, live_server_url: str) -> None:
-    # Arrange: disable form validation (noValidate) so type=url does not block
-    # submit and the API error path can populate #form-error
-    page.goto(live_server_url)
-    page.locator("#submit-form").evaluate("form => { form.noValidate = true; }")
+def test_submit_job_shows_selected_job_with_log(page: Page, live_server) -> None:
+    with live_server() as url:
+        # Arrange
+        page.goto(url)
 
-    # Act
-    page.locator("#url-input").fill("not-a-url")
-    page.locator("#submit-btn").click()
+        # Act
+        page.locator("#url-input").fill("https://example.com/video")
+        page.locator("#submit-btn").click()
 
-    # Assert
-    error = page.locator("#form-error")
-    expect(error).to_be_visible()
-    expect(error).to_contain_text("Invalid URL")
-    expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
+        # Assert
+        expect(page.locator("#url-input")).to_have_value("")
+        article = page.locator("#jobs article.selected")
+        expect(article).to_be_visible()
+        expect(article).to_contain_text("https://example.com/video")
+        expect(article.locator(".status")).to_be_visible()
+        expect(article.get_by_role("button", name="Copy log")).to_be_visible()
+        expect(article.locator("pre")).to_be_visible()
+
+
+def test_cancel_button_cancels_job(page: Page, live_server) -> None:
+    # UI covers the cancel control end-to-end once; queued vs running cancel
+    # semantics are asserted in the API tests.
+    with live_server(block_seconds=60) as url:
+        # Arrange
+        page.goto(url)
+        page.locator("#url-input").fill("https://example.com/video")
+        page.locator("#submit-btn").click()
+        article = page.locator("#jobs article").first
+        expect(article.get_by_role("button", name="Cancel")).to_be_visible()
+
+        # Act
+        article.get_by_role("button", name="Cancel").click()
+
+        # Assert
+        expect(article.locator(".status")).to_have_text("cancelled")
+        expect(article.get_by_role("button", name="Cancel")).to_have_count(0)
+
+
+def test_submit_invalid_url_shows_form_error(page: Page, live_server) -> None:
+    with live_server() as url:
+        # Arrange: disable form validation (noValidate) so type=url does not block
+        # submit and the API error path can populate #form-error
+        page.goto(url)
+        page.locator("#submit-form").evaluate("form => { form.noValidate = true; }")
+
+        # Act
+        page.locator("#url-input").fill("not-a-url")
+        page.locator("#submit-btn").click()
+
+        # Assert
+        error = page.locator("#form-error")
+        expect(error).to_be_visible()
+        expect(error).to_contain_text("Invalid URL")
+        expect(page.locator("#jobs")).to_contain_text("No jobs yet.")

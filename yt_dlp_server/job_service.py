@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
+    CancelledJob,
     FailedJob,
     Job,
     JobSummary,
@@ -31,6 +32,7 @@ class JobService:
         self._store = store
         self._queue: asyncio.Queue[str] = asyncio.Queue()
         self._max_log_lines = max_log_lines
+        self._running_tasks: dict[str, asyncio.Task[None]] = {}
 
     def enqueue(self, url: str) -> QueuedJob:
         if self._store.unfinished_count() >= self._store.max_jobs:
@@ -51,6 +53,12 @@ class JobService:
 
     def task_done(self) -> None:
         self._queue.task_done()
+
+    def set_running_task(self, job_id: str, task: asyncio.Task[None]) -> None:
+        self._running_tasks[job_id] = task
+
+    def clear_running_task(self, job_id: str) -> None:
+        self._running_tasks.pop(job_id, None)
 
     def get(self, job_id: str) -> Job | None:
         return self._store.get(job_id)
@@ -100,3 +108,31 @@ class JobService:
         )
         self._store.put(failed)
         return failed
+
+    def mark_cancelled(self, job_id: str) -> CancelledJob | None:
+        job = self._store.get(job_id)
+        if not isinstance(job, RunningJob):
+            return None
+        cancelled = job.cancel(finished_at=_utcnow())
+        self._store.put(cancelled)
+        return cancelled
+
+    async def cancel(self, job_id: str) -> CancelledJob | None:
+        job = self._store.get(job_id)
+        if isinstance(job, QueuedJob):
+            cancelled = job.cancel(
+                finished_at=_utcnow(),
+                max_log_lines=self._max_log_lines,
+            )
+            self._store.put(cancelled)
+            return cancelled
+        if not isinstance(job, RunningJob):
+            return None
+        running_cancelled = self.mark_cancelled(job_id)
+        if running_cancelled is None:
+            return None
+        task = self._running_tasks.get(job_id)
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.wait({task})
+        return running_cancelled

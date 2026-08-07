@@ -130,6 +130,16 @@
         padding: 0.35rem 0.65rem;
         font-size: 0.8rem;
       }
+      button.danger {
+        color: var(--danger);
+        border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.65rem;
+      }
       .log-header {
         display: flex;
         justify-content: flex-end;
@@ -230,6 +240,37 @@
               ${job.error ? " · " + escapeHtml(job.error) : ""}
             </div>
           `;
+          if (job.status === "queued" || job.status === "running") {
+            const actions = document.createElement("div");
+            actions.className = "actions";
+            const cancelBtn = document.createElement("button");
+            cancelBtn.type = "button";
+            cancelBtn.className = "secondary danger";
+            cancelBtn.textContent = "Cancel";
+            cancelBtn.addEventListener("click", async (event) => {
+              event.stopPropagation();
+              cancelBtn.disabled = true;
+              try {
+                const res = await fetch("/api/cancelJob", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: job.id }),
+                });
+                if (!res.ok) {
+                  throw new Error("Cancel failed");
+                }
+                await refreshJobs();
+              } catch {
+                cancelBtn.disabled = false;
+                cancelBtn.textContent = "Cancel failed";
+                setTimeout(() => {
+                  cancelBtn.textContent = "Cancel";
+                }, 1500);
+              }
+            });
+            actions.appendChild(cancelBtn);
+            article.appendChild(actions);
+          }
           if (job.id === selectedId && selectedDetail) {
             const logText =
               (selectedDetail.log?.lines || []).join("") ||

@@ -54,3 +54,33 @@ def test_enqueue_rejects_when_unfinished_at_capacity() -> None:
     # Act / Assert
     with pytest.raises(JobCapacityFull):
         jobs.enqueue("https://example.com/3")
+
+
+@pytest.mark.asyncio
+async def test_cancel_queued_job_marks_cancelled() -> None:
+    # Arrange
+    jobs = _make_jobs()
+    job = jobs.enqueue("https://example.com/video")
+
+    # Act
+    cancelled = await jobs.cancel(job.id)
+
+    # Assert
+    assert cancelled is not None
+    assert cancelled.status == JobStatus.cancelled
+    assert jobs.get(job.id) is cancelled
+
+
+@pytest.mark.asyncio
+async def test_cancel_finished_job_returns_none() -> None:
+    # Arrange
+    jobs = _make_jobs()
+    job = jobs.enqueue("https://example.com/video")
+    jobs.mark_running(job.id)
+    jobs.mark_succeeded(job.id)
+
+    # Act
+    cancelled = await jobs.cancel(job.id)
+
+    # Assert
+    assert cancelled is None
