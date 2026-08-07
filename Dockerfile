@@ -6,10 +6,13 @@ ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 
 COPY pyproject.toml uv.lock ./
-COPY yt_dlp_server ./yt_dlp_server
 
 RUN pip install --no-cache-dir uv && \
-    uv sync --locked --no-dev
+    uv sync --locked --no-dev --no-install-project
+
+COPY yt_dlp_server ./yt_dlp_server
+
+RUN uv sync --locked --no-dev
 
 FROM alpine:latest AS ffmpeg-downloader
 
