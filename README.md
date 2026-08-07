@@ -34,3 +34,7 @@ OUTPUT_DIR=./out uv run python -m yt_dlp_server
 ```bash
 make check
 ```
+
+## License
+
+This project is MIT-licensed. The Docker image also bundles a GPL build of FFmpeg from [yt-dlp/FFmpeg-Builds](https://github.com/yt-dlp/FFmpeg-Builds); that binary is covered by its own license, not by this project's MIT license. Source for those builds is available from that repository.
