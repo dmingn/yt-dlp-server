@@ -31,6 +31,7 @@ def _wait_for_status(
     while time.monotonic() < deadline:
         detail = client.post("/api/getJob", json={"id": job_id})
         body = detail.json()
+        assert isinstance(body, dict)
         if body["status"] in statuses:
             return body
         time.sleep(0.05)

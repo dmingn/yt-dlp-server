@@ -1,7 +1,12 @@
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+
 from playwright.sync_api import Page, expect
 
+LiveServer = Callable[..., AbstractContextManager[str]]
 
-def test_index_shows_empty_jobs(page: Page, live_server) -> None:
+
+def test_index_shows_empty_jobs(page: Page, live_server: LiveServer) -> None:
     # Act
     with live_server() as url:
         page.goto(url)
@@ -12,7 +17,9 @@ def test_index_shows_empty_jobs(page: Page, live_server) -> None:
         expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
 
 
-def test_submit_job_shows_selected_job_with_log(page: Page, live_server) -> None:
+def test_submit_job_shows_selected_job_with_log(
+    page: Page, live_server: LiveServer
+) -> None:
     with live_server() as url:
         # Arrange
         page.goto(url)
@@ -31,7 +38,7 @@ def test_submit_job_shows_selected_job_with_log(page: Page, live_server) -> None
         expect(article.locator("pre")).to_be_visible()
 
 
-def test_cancel_button_cancels_job(page: Page, live_server) -> None:
+def test_cancel_button_cancels_job(page: Page, live_server: LiveServer) -> None:
     # UI covers the cancel control end-to-end once; queued vs running cancel
     # semantics are asserted in the API tests.
     with live_server(block_seconds=60) as url:
@@ -50,7 +57,9 @@ def test_cancel_button_cancels_job(page: Page, live_server) -> None:
         expect(article.get_by_role("button", name="Cancel")).to_have_count(0)
 
 
-def test_submit_invalid_url_shows_form_error(page: Page, live_server) -> None:
+def test_submit_invalid_url_shows_form_error(
+    page: Page, live_server: LiveServer
+) -> None:
     with live_server() as url:
         # Arrange: disable form validation (noValidate) so type=url does not block
         # submit and the API error path can populate #form-error
