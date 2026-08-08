@@ -10,7 +10,7 @@ from yt_dlp_server.models import CancelledJob, FailedJob, JobStatus, SucceededJo
 from yt_dlp_server.worker import process_job
 
 
-def _make_jobs(*, max_jobs: int = 100, max_log_lines: int = 2000) -> JobService:
+def _make_job_service(*, max_jobs: int = 100, max_log_lines: int = 2000) -> JobService:
     return JobService(
         JobStore(max_jobs=max_jobs),
         max_log_lines=max_log_lines,
@@ -84,9 +84,9 @@ async def test_process_job_succeeds_and_appends_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    jobs = _make_jobs()
-    job = jobs.enqueue("https://example.com/video")
-    await jobs.claim_next()
+    job_service = _make_job_service()
+    job = job_service.enqueue("https://example.com/video")
+    await job_service.claim_next()
 
     async def fake_create_subprocess_exec(
         *cmd: str,
@@ -106,10 +106,10 @@ async def test_process_job_succeeds_and_appends_logs(
     )
 
     # Act
-    await process_job(jobs, job.id, output_dir="/out")
+    await process_job(job_service, job.id, output_dir="/out")
 
     # Assert
-    finished = jobs.get(job.id)
+    finished = job_service.get(job.id)
     assert isinstance(finished, SucceededJob)
     assert finished.status == JobStatus.succeeded
     assert finished.exit_code == 0
@@ -122,9 +122,9 @@ async def test_process_job_marks_failed_on_nonzero_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    jobs = _make_jobs()
-    job = jobs.enqueue("https://example.com/video")
-    await jobs.claim_next()
+    job_service = _make_job_service()
+    job = job_service.enqueue("https://example.com/video")
+    await job_service.claim_next()
 
     async def fake_create_subprocess_exec(
         *cmd: str,
@@ -139,10 +139,10 @@ async def test_process_job_marks_failed_on_nonzero_exit(
     )
 
     # Act
-    await process_job(jobs, job.id, output_dir="/out")
+    await process_job(job_service, job.id, output_dir="/out")
 
     # Assert
-    finished = jobs.get(job.id)
+    finished = job_service.get(job.id)
     assert isinstance(finished, FailedJob)
     assert finished.status == JobStatus.failed
     assert finished.exit_code == 1
@@ -154,9 +154,9 @@ async def test_process_job_cancelled_kills_and_marks_cancelled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    jobs = _make_jobs()
-    job = jobs.enqueue("https://example.com/video")
-    await jobs.claim_next()
+    job_service = _make_job_service()
+    job = job_service.enqueue("https://example.com/video")
+    await job_service.claim_next()
 
     started = asyncio.Event()
     proc = _BlockingProc(started)
@@ -173,18 +173,18 @@ async def test_process_job_cancelled_kills_and_marks_cancelled(
         fake_create_subprocess_exec,
     )
 
-    task = asyncio.create_task(process_job(jobs, job.id, output_dir="/out"))
-    jobs.set_running_task(job.id, task)
+    task = asyncio.create_task(process_job(job_service, job.id, output_dir="/out"))
+    job_service.set_running_task(job.id, task)
     await started.wait()
 
     # Act
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    jobs.clear_running_task(job.id)
+    job_service.clear_running_task(job.id)
 
     # Assert
-    finished = jobs.get(job.id)
+    finished = job_service.get(job.id)
     assert isinstance(finished, CancelledJob)
     assert finished.status == JobStatus.cancelled
     assert proc.killed
@@ -195,9 +195,9 @@ async def test_cancel_running_job_via_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    jobs = _make_jobs()
-    job = jobs.enqueue("https://example.com/video")
-    await jobs.claim_next()
+    job_service = _make_job_service()
+    job = job_service.enqueue("https://example.com/video")
+    await job_service.claim_next()
 
     started = asyncio.Event()
     proc = _BlockingProc(started)
@@ -214,17 +214,17 @@ async def test_cancel_running_job_via_service(
         fake_create_subprocess_exec,
     )
 
-    task = asyncio.create_task(process_job(jobs, job.id, output_dir="/out"))
-    jobs.set_running_task(job.id, task)
+    task = asyncio.create_task(process_job(job_service, job.id, output_dir="/out"))
+    job_service.set_running_task(job.id, task)
     await started.wait()
 
     # Act
-    cancelled = await jobs.cancel(job.id)
-    jobs.clear_running_task(job.id)
+    cancelled = await job_service.cancel(job.id)
+    job_service.clear_running_task(job.id)
 
     # Assert
     assert cancelled is not None
     assert cancelled.status == JobStatus.cancelled
-    assert isinstance(jobs.get(job.id), CancelledJob)
+    assert isinstance(job_service.get(job.id), CancelledJob)
     assert proc.killed
     assert task.done()
