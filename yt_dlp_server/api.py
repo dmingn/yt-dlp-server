@@ -25,7 +25,7 @@ class CancelJobRequest(BaseModel):
 router = APIRouter(prefix="/api")
 
 
-def _jobs(request: Request) -> JobService:
+def _job_service_from_request(request: Request) -> JobService:
     jobs = request.app.state.jobs
     assert isinstance(jobs, JobService)
     return jobs
@@ -34,19 +34,19 @@ def _jobs(request: Request) -> JobService:
 @router.post("/createJob", response_model=Job, status_code=201)
 async def create_job(body: CreateJobRequest, request: Request) -> QueuedJob:
     try:
-        return _jobs(request).enqueue(str(body.url))
+        return _job_service_from_request(request).enqueue(str(body.url))
     except JobCapacityFull:
         raise HTTPException(status_code=503, detail="Job capacity full") from None
 
 
 @router.post("/listJobs", response_model=list[JobSummary])
 async def list_jobs(request: Request) -> list[JobSummary]:
-    return _jobs(request).list_summaries()
+    return _job_service_from_request(request).list_summaries()
 
 
 @router.post("/getJob", response_model=Job)
 async def get_job(body: GetJobRequest, request: Request) -> Job:
-    job = _jobs(request).get(body.id)
+    job = _job_service_from_request(request).get(body.id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -54,7 +54,7 @@ async def get_job(body: GetJobRequest, request: Request) -> Job:
 
 @router.post("/cancelJob", response_model=Job)
 async def cancel_job(body: CancelJobRequest, request: Request) -> CancelledJob:
-    jobs = _jobs(request)
+    jobs = _job_service_from_request(request)
     if jobs.get(body.id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
     cancelled = await jobs.cancel(body.id)
