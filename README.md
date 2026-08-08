@@ -14,7 +14,7 @@ Paste a URL in the browser; the server downloads it with fixed yt-dlp settings.
 
 ```bash
 mkdir -p out
-docker compose up --build
+make up
 ```
 
 Open `http://<host>:8000`.

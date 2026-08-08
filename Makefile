@@ -26,7 +26,7 @@ docker-build-smoke:
 	@if [ -z "$(PLATFORM)" ]; then echo "ERROR: PLATFORM is required (e.g. PLATFORM=linux/amd64)" >&2; exit 1; fi
 	@set -e; \
 	tag="$(if $(TAG),$(TAG),local-smoke)"; \
-	ver="$(if $(SETUPTOOLS_SCM_PRETEND_VERSION),$(SETUPTOOLS_SCM_PRETEND_VERSION),$$(uv run python -c 'from importlib.metadata import version; print(version(\"yt-dlp-server\"))'))"; \
+	ver="$(if $(SETUPTOOLS_SCM_PRETEND_VERSION),$(SETUPTOOLS_SCM_PRETEND_VERSION),$$(uv run python -c "from importlib.metadata import version; print(version('yt-dlp-server'))"))"; \
 	echo "Building $$tag for $(PLATFORM) (version=$$ver)"; \
 	docker buildx build --load --platform "$(PLATFORM)" \
 		--build-arg "SETUPTOOLS_SCM_PRETEND_VERSION=$$ver" \
@@ -37,6 +37,13 @@ docker-build-smoke:
 docker-build-smoke-all:
 	$(MAKE) docker-build-smoke TAG="$${TAG:-local-smoke}-amd64" PLATFORM=linux/amd64
 	$(MAKE) docker-build-smoke TAG="$${TAG:-local-smoke}-arm64" PLATFORM=linux/arm64
+
+.PHONY: up
+up:
+	@set -e; \
+	ver="$(if $(SETUPTOOLS_SCM_PRETEND_VERSION),$(SETUPTOOLS_SCM_PRETEND_VERSION),$$(uv run python -c "from importlib.metadata import version; print(version('yt-dlp-server'))"))"; \
+	echo "SETUPTOOLS_SCM_PRETEND_VERSION=$$ver"; \
+	SETUPTOOLS_SCM_PRETEND_VERSION=$$ver docker compose up --build
 
 .PHONY: fmt
 fmt:
