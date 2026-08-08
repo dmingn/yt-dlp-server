@@ -1,15 +1,26 @@
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import AnyHttpUrl, BaseModel
 
 from yt_dlp_server.job_service import JobCapacityFull, JobService
 from yt_dlp_server.models import (
-    CancelJobRequest,
     CancelledJob,
-    CreateJobRequest,
-    GetJobRequest,
     Job,
     JobSummary,
     QueuedJob,
 )
+
+
+class CreateJobRequest(BaseModel):
+    url: AnyHttpUrl
+
+
+class GetJobRequest(BaseModel):
+    id: str
+
+
+class CancelJobRequest(BaseModel):
+    id: str
+
 
 router = APIRouter(prefix="/api")
 

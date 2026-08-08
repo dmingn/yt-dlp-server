@@ -141,18 +141,6 @@ UnfinishedJob = QueuedJob | RunningJob
 FinishedJob = SucceededJob | FailedJob | CancelledJob
 
 
-class CreateJobRequest(BaseModel):
-    url: AnyHttpUrl
-
-
-class GetJobRequest(BaseModel):
-    id: str
-
-
-class CancelJobRequest(BaseModel):
-    id: str
-
-
 class JobSummary(BaseModel):
     id: str
     url: AnyHttpUrl
