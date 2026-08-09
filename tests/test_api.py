@@ -1,5 +1,6 @@
 import time
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -10,12 +11,12 @@ from yt_dlp_server.settings import Settings
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[TestClient]:
     monkeypatch.setattr(
         "yt_dlp_server.worker.build_yt_dlp_cmd",
         lambda **kwargs: ("true",),
     )
-    app = create_app(Settings(n_workers=1))
+    app = create_app(Settings(n_workers=1, database_path=tmp_path / "jobs.sqlite3"))
     with TestClient(app) as test_client:
         yield test_client
 
@@ -125,13 +126,14 @@ def test_get_job_returns_404_for_unknown_id(client: TestClient) -> None:
 
 def test_cancel_job_marks_queued_as_cancelled(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange: occupy the only worker so the second job stays queued
     monkeypatch.setattr(
         "yt_dlp_server.worker.build_yt_dlp_cmd",
         lambda **kwargs: ("sleep", "60"),
     )
-    app = create_app(Settings(n_workers=1))
+    app = create_app(Settings(n_workers=1, database_path=tmp_path / "jobs.sqlite3"))
     with TestClient(app) as client:
         running = client.post(
             "/api/createJob",
@@ -157,13 +159,16 @@ def test_cancel_job_marks_queued_as_cancelled(
         assert body["status"] == "cancelled"
 
 
-def test_cancel_job_cancels_running(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cancel_job_cancels_running(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     # Arrange
     monkeypatch.setattr(
         "yt_dlp_server.worker.build_yt_dlp_cmd",
         lambda **kwargs: ("sleep", "60"),
     )
-    app = create_app(Settings(n_workers=1))
+    app = create_app(Settings(n_workers=1, database_path=tmp_path / "jobs.sqlite3"))
     with TestClient(app) as client:
         created = client.post(
             "/api/createJob",
@@ -190,13 +195,14 @@ def test_cancel_job_returns_404_for_unknown_id(client: TestClient) -> None:
 
 def test_cancel_job_returns_409_when_already_finished(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange
     monkeypatch.setattr(
         "yt_dlp_server.worker.build_yt_dlp_cmd",
         lambda **kwargs: ("true",),
     )
-    app = create_app(Settings(n_workers=1))
+    app = create_app(Settings(n_workers=1, database_path=tmp_path / "jobs.sqlite3"))
     with TestClient(app) as client:
         created = client.post(
             "/api/createJob",
@@ -214,13 +220,20 @@ def test_cancel_job_returns_409_when_already_finished(
 
 def test_create_job_returns_503_when_at_capacity(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange
     monkeypatch.setattr(
         "yt_dlp_server.worker.build_yt_dlp_cmd",
         lambda **kwargs: ("sleep", "60"),
     )
-    app = create_app(Settings(n_workers=1, max_jobs=1))
+    app = create_app(
+        Settings(
+            n_workers=1,
+            max_jobs=1,
+            database_path=tmp_path / "jobs.sqlite3",
+        )
+    )
     with TestClient(app) as client:
         first = client.post(
             "/api/createJob",

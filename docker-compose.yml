@@ -11,6 +11,8 @@ services:
       - "8000:8000"
     volumes:
       - "./out:/out"
+      - "./data:/data"
     environment:
       N_WORKERS: "1"
       OUTPUT_DIR: "/out"
+      DATABASE_PATH: "/data/jobs.sqlite3"
