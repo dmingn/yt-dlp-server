@@ -1,40 +1,178 @@
-from yt_dlp_server.models import FinishedJob, Job, UnfinishedJob
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+from yt_dlp_server.db import connect
+from yt_dlp_server.models import (
+    FINISHED_STATUSES,
+    JOB_ADAPTER,
+    UNFINISHED_STATUSES,
+    Job,
+    JobLog,
+    RunningJob,
+)
 
 
 class JobStore:
-    """In-memory job registry with a bounded number of retained jobs."""
+    """SQLite-backed job registry with a bounded number of retained jobs."""
 
-    def __init__(self, *, max_jobs: int) -> None:
+    def __init__(
+        self,
+        *,
+        max_jobs: int,
+        database_path: Path,
+        max_log_lines: int,
+    ) -> None:
         self._max_jobs = max_jobs
-        self._jobs: dict[str, Job] = {}
+        self._max_log_lines = max_log_lines
+        self._conn = connect(database_path)
 
     @property
     def max_jobs(self) -> int:
         return self._max_jobs
 
-    def put(self, job: Job) -> None:
-        self._jobs[job.id] = job
-        self._evict()
+    def close(self) -> None:
+        self._conn.close()
 
-    def get(self, job_id: str) -> Job | None:
-        return self._jobs.get(job_id)
+    def save_metadata(self, job: Job) -> None:
+        with self._conn:
+            self._upsert_metadata(job)
+        self._evict_finished()
+
+    def get_job(self, job_id: str) -> Job | None:
+        row = self._conn.execute(
+            "SELECT * FROM jobs WHERE id = ?",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._job_from_row(row)
 
     def list_jobs(self) -> list[Job]:
-        return sorted(
-            self._jobs.values(),
-            key=lambda job: job.created_at,
-            reverse=True,
-        )
+        rows = self._conn.execute(
+            "SELECT * FROM jobs ORDER BY created_at DESC",
+        ).fetchall()
+        return [self._job_from_row(row) for row in rows]
 
     def unfinished_count(self) -> int:
-        return sum(1 for job in self._jobs.values() if isinstance(job, UnfinishedJob))
+        placeholders = ",".join("?" * len(UNFINISHED_STATUSES))
+        row = self._conn.execute(
+            f"SELECT COUNT(*) AS n FROM jobs WHERE status IN ({placeholders})",
+            UNFINISHED_STATUSES,
+        ).fetchone()
+        return int(row["n"])
 
-    def _evict(self) -> None:
-        while len(self._jobs) > self._max_jobs:
-            finished = [
-                job for job in self._jobs.values() if isinstance(job, FinishedJob)
-            ]
-            if not finished:
-                break
-            oldest = min(finished, key=lambda job: job.created_at)
-            del self._jobs[oldest.id]
+    def append_log(self, job_id: str, line: str) -> None:
+        with self._conn:
+            next_seq_row = self._conn.execute(
+                "SELECT COALESCE(MAX(seq), 0) AS max_seq FROM job_log_lines WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            next_seq = int(next_seq_row["max_seq"]) + 1
+            self._conn.execute(
+                "INSERT INTO job_log_lines (job_id, seq, line) VALUES (?, ?, ?)",
+                (job_id, next_seq, line),
+            )
+            self._conn.execute(
+                """
+                DELETE FROM job_log_lines
+                WHERE job_id = ?
+                  AND seq <= (
+                    SELECT MAX(seq) FROM job_log_lines WHERE job_id = ?
+                  ) - ?
+                """,
+                (job_id, job_id, self._max_log_lines),
+            )
+
+    def unfinished_ids(self) -> list[str]:
+        placeholders = ",".join("?" * len(UNFINISHED_STATUSES))
+        rows = self._conn.execute(
+            f"""
+            SELECT id FROM jobs
+            WHERE status IN ({placeholders})
+            ORDER BY created_at ASC
+            """,
+            UNFINISHED_STATUSES,
+        ).fetchall()
+        return [str(row["id"]) for row in rows]
+
+    def requeue_running(self) -> None:
+        running = [job for job in self.list_jobs() if isinstance(job, RunningJob)]
+        for job in running:
+            with self._conn:
+                self._upsert_metadata(job.requeue())
+                self._conn.execute(
+                    "DELETE FROM job_log_lines WHERE job_id = ?",
+                    (job.id,),
+                )
+            self._evict_finished()
+
+    def _upsert_metadata(self, job: Job) -> None:
+        row = job.model_dump(mode="json", exclude={"log"})
+        self._conn.execute(
+            """
+            INSERT INTO jobs (
+              id, url, status, created_at, started_at, finished_at, exit_code, error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              url = excluded.url,
+              status = excluded.status,
+              created_at = excluded.created_at,
+              started_at = excluded.started_at,
+              finished_at = excluded.finished_at,
+              exit_code = excluded.exit_code,
+              error = excluded.error
+            """,
+            (
+                row["id"],
+                row["url"],
+                row["status"],
+                row["created_at"],
+                row.get("started_at"),
+                row.get("finished_at"),
+                row.get("exit_code"),
+                row.get("error"),
+            ),
+        )
+
+    def _evict_finished(self) -> None:
+        with self._conn:
+            while True:
+                count_row = self._conn.execute(
+                    "SELECT COUNT(*) AS n FROM jobs"
+                ).fetchone()
+                if int(count_row["n"]) <= self._max_jobs:
+                    return
+                placeholders = ",".join("?" * len(FINISHED_STATUSES))
+                oldest = self._conn.execute(
+                    f"""
+                    SELECT id FROM jobs
+                    WHERE status IN ({placeholders})
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    FINISHED_STATUSES,
+                ).fetchone()
+                if oldest is None:
+                    return
+                self._conn.execute("DELETE FROM jobs WHERE id = ?", (oldest["id"],))
+
+    def _log_lines(self, job_id: str) -> tuple[str, ...]:
+        rows = self._conn.execute(
+            """
+            SELECT line FROM job_log_lines
+            WHERE job_id = ?
+            ORDER BY seq ASC
+            """,
+            (job_id,),
+        ).fetchall()
+        return tuple(str(row["line"]) for row in rows)
+
+    def _job_from_row(self, row: sqlite3.Row) -> Job:
+        return JOB_ADAPTER.validate_python(
+            {
+                **dict(row),
+                "log": JobLog(lines=self._log_lines(str(row["id"]))),
+            }
+        )
