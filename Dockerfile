@@ -33,8 +33,8 @@ FROM python:3.14-slim
 
 RUN groupadd -g 1000 appgroup && \
     useradd -m -u 1000 -g appgroup appuser && \
-    mkdir -p /out && \
-    chown appuser:appgroup /out
+    mkdir -p /out /data && \
+    chown appuser:appgroup /out /data
 
 WORKDIR /workdir
 

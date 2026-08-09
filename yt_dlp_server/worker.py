@@ -58,7 +58,10 @@ async def process_job(
                 exit_code=exit_code,
             )
     except asyncio.CancelledError:
-        jobs.mark_cancelled(job_id)
+        # Do not update job status here. Why, for each cancel path:
+        # - UI/API cancel: JobService.cancel already saved status=cancelled.
+        # - Process shutdown (e.g. SIGINT): leave status as running so the
+        #   next startup can re-queue the job.
         raise
     except Exception as exc:
         jobs.mark_failed(job_id, error=f"{type(exc).__name__}: {exc}")

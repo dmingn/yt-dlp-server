@@ -1,8 +1,8 @@
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Literal, assert_never
+from typing import Annotated, Literal, assert_never, get_args
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter
 
 
 class JobStatus(str, Enum):
@@ -17,14 +17,6 @@ class JobLog(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     lines: tuple[str, ...] = ()
-    max_lines: int = Field(ge=1, exclude=True)
-
-    def append(self, line: str) -> JobLog:
-        lines = [*self.lines, line]
-        overflow = len(lines) - self.max_lines
-        if overflow > 0:
-            lines = lines[overflow:]
-        return JobLog(lines=tuple(lines), max_lines=self.max_lines)
 
     def __len__(self) -> int:
         return len(self.lines)
@@ -41,22 +33,22 @@ class _JobBase(BaseModel):
 class QueuedJob(_JobBase):
     status: Literal[JobStatus.queued] = JobStatus.queued
 
-    def start(self, *, started_at: datetime, max_log_lines: int) -> RunningJob:
+    def start(self, *, started_at: datetime) -> RunningJob:
         return RunningJob(
             id=self.id,
             url=self.url,
             created_at=self.created_at,
             started_at=started_at,
-            log=JobLog(max_lines=max_log_lines),
+            log=JobLog(),
         )
 
-    def cancel(self, *, finished_at: datetime, max_log_lines: int) -> CancelledJob:
+    def cancel(self, *, finished_at: datetime) -> CancelledJob:
         return CancelledJob(
             id=self.id,
             url=self.url,
             created_at=self.created_at,
             finished_at=finished_at,
-            log=JobLog(max_lines=max_log_lines),
+            log=JobLog(),
         )
 
 
@@ -65,8 +57,12 @@ class RunningJob(_JobBase):
     started_at: datetime
     log: JobLog
 
-    def append_log_line(self, line: str) -> RunningJob:
-        return self.model_copy(update={"log": self.log.append(line)})
+    def requeue(self) -> QueuedJob:
+        return QueuedJob(
+            id=self.id,
+            url=self.url,
+            created_at=self.created_at,
+        )
 
     def succeed(self, *, finished_at: datetime, exit_code: int = 0) -> SucceededJob:
         return SucceededJob(
@@ -137,8 +133,17 @@ Job = Annotated[
     Field(discriminator="status"),
 ]
 
+JOB_ADAPTER: TypeAdapter[Job] = TypeAdapter(Job)
+
 UnfinishedJob = QueuedJob | RunningJob
 FinishedJob = SucceededJob | FailedJob | CancelledJob
+
+UNFINISHED_STATUSES = tuple(
+    t.model_fields["status"].default.value for t in get_args(UnfinishedJob)
+)
+FINISHED_STATUSES = tuple(
+    t.model_fields["status"].default.value for t in get_args(FinishedJob)
+)
 
 
 class JobSummary(BaseModel):
