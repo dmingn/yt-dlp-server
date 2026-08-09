@@ -7,7 +7,13 @@ import pytest
 
 from yt_dlp_server.job_service import JobService
 from yt_dlp_server.job_store import JobStore
-from yt_dlp_server.models import CancelledJob, FailedJob, JobStatus, RunningJob, SucceededJob
+from yt_dlp_server.models import (
+    CancelledJob,
+    FailedJob,
+    JobStatus,
+    RunningJob,
+    SucceededJob,
+)
 from yt_dlp_server.worker import process_job
 
 
