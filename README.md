@@ -8,27 +8,27 @@ Paste a URL in the browser; the server downloads it with fixed yt-dlp settings.
 
 - Intended for trusted LAN use only. **There is no authentication.**
 - Anyone who can reach the service can submit arbitrary URLs for download.
-- Job status and logs live in memory and are lost on restart. Downloaded files on disk remain.
+- Job status and logs are stored in SQLite (`DATABASE_PATH`, default `jobs.sqlite3`) and survive restarts. On startup, `running` jobs are reset to `queued` and unfinished jobs are re-queued. User-cancelled jobs stay `cancelled`. Downloaded files on disk remain.
 
 ## Quick start (Docker)
 
 ```bash
-mkdir -p out
+mkdir -p out data
 make up
 ```
 
 Open `http://<host>:8000`.
 
-Downloaded files are written under `./out` on the host (mounted at `/out` in the container), grouped by extractor / channel / playlist. Change the root with `OUTPUT_DIR`.
+Downloaded files are written under `./out` on the host (mounted at `/out` in the container), grouped by extractor / channel / playlist. Change the root with `OUTPUT_DIR`. The job database is stored under `./data` (`DATABASE_PATH=/data/jobs.sqlite3`).
 
-Default is 1 worker (`N_WORKERS`). `MAX_JOBS` caps unfinished jobs and how many finished jobs are kept in memory.
+Default is 1 worker (`N_WORKERS`). `MAX_JOBS` caps unfinished jobs and how many finished jobs are retained.
 
 ## Local development
 
 ```bash
 uv sync
-mkdir -p out
-OUTPUT_DIR=./out uv run python -m yt_dlp_server
+mkdir -p out data
+OUTPUT_DIR=./out DATABASE_PATH=./data/jobs.sqlite3 uv run python -m yt_dlp_server
 ```
 
 ```bash

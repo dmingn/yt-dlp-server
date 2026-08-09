@@ -3,6 +3,7 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
+from pathlib import Path
 from typing import Protocol
 
 import httpx
@@ -25,14 +26,19 @@ def _free_port() -> int:
 
 
 @pytest.fixture
-def live_server(monkeypatch: pytest.MonkeyPatch) -> LiveServerFactory:
+def live_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> LiveServerFactory:
     @contextmanager
     def _start(*, block_seconds: int = 0) -> Iterator[str]:
         monkeypatch.setattr(
             "yt_dlp_server.worker.build_yt_dlp_cmd",
             lambda **kwargs: ("sleep", str(block_seconds)),
         )
-        app = create_app(Settings(n_workers=1))
+        app = create_app(
+            Settings(
+                n_workers=1,
+                database_path=tmp_path / "jobs.sqlite3",
+            )
+        )
         port = _free_port()
         config = uvicorn.Config(
             app,

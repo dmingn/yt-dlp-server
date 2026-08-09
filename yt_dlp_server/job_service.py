@@ -23,15 +23,9 @@ def _utcnow() -> datetime:
 
 
 class JobService:
-    def __init__(
-        self,
-        store: JobStore,
-        *,
-        max_log_lines: int,
-    ) -> None:
+    def __init__(self, store: JobStore) -> None:
         self._store = store
         self._queue: asyncio.Queue[str] = asyncio.Queue()
-        self._max_log_lines = max_log_lines
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
 
     def enqueue(self, url: str) -> QueuedJob:
@@ -44,7 +38,7 @@ class JobService:
                 "created_at": _utcnow(),
             }
         )
-        self._store.put(job)
+        self._store.save_metadata(job)
         self._queue.put_nowait(job.id)
         return job
 
@@ -61,34 +55,35 @@ class JobService:
         self._running_tasks.pop(job_id, None)
 
     def get(self, job_id: str) -> Job | None:
-        return self._store.get(job_id)
+        return self._store.get_job(job_id)
 
     def list_summaries(self) -> list[JobSummary]:
         return [JobSummary.from_job(job) for job in self._store.list_jobs()]
 
     def mark_running(self, job_id: str) -> RunningJob | None:
-        job = self._store.get(job_id)
+        job = self._store.get_job(job_id)
         if not isinstance(job, QueuedJob):
             return None
-        running = job.start(
-            started_at=_utcnow(),
-            max_log_lines=self._max_log_lines,
-        )
-        self._store.put(running)
+        running = job.start(started_at=_utcnow())
+        self._store.save_metadata(running)
         return running
 
     def append_log_line(self, job_id: str, line: str) -> None:
-        job = self._store.get(job_id)
+        job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return
-        self._store.put(job.append_log_line(line))
+        self._store.append_log(job_id, line)
+
+    def rehydrate_queue(self) -> None:
+        for job_id in self._store.unfinished_ids():
+            self._queue.put_nowait(job_id)
 
     def mark_succeeded(self, job_id: str) -> SucceededJob | None:
-        job = self._store.get(job_id)
+        job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
         succeeded = job.succeed(finished_at=_utcnow())
-        self._store.put(succeeded)
+        self._store.save_metadata(succeeded)
         return succeeded
 
     def mark_failed(
@@ -98,7 +93,7 @@ class JobService:
         error: str,
         exit_code: int | None = None,
     ) -> FailedJob | None:
-        job = self._store.get(job_id)
+        job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
         failed = job.fail(
@@ -106,25 +101,22 @@ class JobService:
             error=error,
             exit_code=exit_code,
         )
-        self._store.put(failed)
+        self._store.save_metadata(failed)
         return failed
 
     def mark_cancelled(self, job_id: str) -> CancelledJob | None:
-        job = self._store.get(job_id)
+        job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
         cancelled = job.cancel(finished_at=_utcnow())
-        self._store.put(cancelled)
+        self._store.save_metadata(cancelled)
         return cancelled
 
     async def cancel(self, job_id: str) -> CancelledJob | None:
-        job = self._store.get(job_id)
+        job = self._store.get_job(job_id)
         if isinstance(job, QueuedJob):
-            cancelled = job.cancel(
-                finished_at=_utcnow(),
-                max_log_lines=self._max_log_lines,
-            )
-            self._store.put(cancelled)
+            cancelled = job.cancel(finished_at=_utcnow())
+            self._store.save_metadata(cancelled)
             return cancelled
         if not isinstance(job, RunningJob):
             return None

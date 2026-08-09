@@ -1,19 +1,28 @@
 import asyncio
 import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from yt_dlp_server.job_service import JobService
 from yt_dlp_server.job_store import JobStore
-from yt_dlp_server.models import CancelledJob, FailedJob, JobStatus, SucceededJob
+from yt_dlp_server.models import CancelledJob, FailedJob, JobStatus, RunningJob, SucceededJob
 from yt_dlp_server.worker import process_job
 
 
-def _make_job_service(*, max_jobs: int = 100, max_log_lines: int = 2000) -> JobService:
+def _make_job_service(
+    tmp_path: Path,
+    *,
+    max_jobs: int = 100,
+    max_log_lines: int = 2000,
+) -> JobService:
     return JobService(
-        JobStore(max_jobs=max_jobs),
-        max_log_lines=max_log_lines,
+        JobStore(
+            max_jobs=max_jobs,
+            database_path=tmp_path / "jobs.sqlite3",
+            max_log_lines=max_log_lines,
+        )
     )
 
 
@@ -82,9 +91,10 @@ class _BlockingProc:
 @pytest.mark.asyncio
 async def test_process_job_succeeds_and_appends_logs(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange
-    job_service = _make_job_service()
+    job_service = _make_job_service(tmp_path)
     job = job_service.enqueue("https://example.com/video")
     await job_service.claim_next()
 
@@ -120,9 +130,10 @@ async def test_process_job_succeeds_and_appends_logs(
 @pytest.mark.asyncio
 async def test_process_job_marks_failed_on_nonzero_exit(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange
-    job_service = _make_job_service()
+    job_service = _make_job_service(tmp_path)
     job = job_service.enqueue("https://example.com/video")
     await job_service.claim_next()
 
@@ -150,11 +161,12 @@ async def test_process_job_marks_failed_on_nonzero_exit(
 
 
 @pytest.mark.asyncio
-async def test_process_job_cancelled_kills_and_marks_cancelled(
+async def test_process_job_cancelled_kills_and_leaves_running(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange
-    job_service = _make_job_service()
+    job_service = _make_job_service(tmp_path)
     job = job_service.enqueue("https://example.com/video")
     await job_service.claim_next()
 
@@ -184,18 +196,19 @@ async def test_process_job_cancelled_kills_and_marks_cancelled(
     job_service.clear_running_task(job.id)
 
     # Assert
-    finished = job_service.get(job.id)
-    assert isinstance(finished, CancelledJob)
-    assert finished.status == JobStatus.cancelled
+    current = job_service.get(job.id)
+    assert isinstance(current, RunningJob)
+    assert current.status == JobStatus.running
     assert proc.killed
 
 
 @pytest.mark.asyncio
 async def test_cancel_running_job_via_service(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     # Arrange
-    job_service = _make_job_service()
+    job_service = _make_job_service(tmp_path)
     job = job_service.enqueue("https://example.com/video")
     await job_service.claim_next()
 
