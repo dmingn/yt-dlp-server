@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from yt_dlp_server.db import connect
@@ -10,6 +11,8 @@ from yt_dlp_server.models import (
     UNFINISHED_STATUSES,
     Job,
     JobLog,
+    JobStatus,
+    QueuedJob,
     RunningJob,
 )
 
@@ -96,6 +99,28 @@ class JobStore:
             UNFINISHED_STATUSES,
         ).fetchall()
         return [str(row["id"]) for row in rows]
+
+    def claim_oldest_queued(self, *, started_at: datetime) -> RunningJob | None:
+        """Take ownership of the oldest queued job by marking it running."""
+        with self._conn:
+            row = self._conn.execute(
+                """
+                SELECT * FROM jobs
+                WHERE status = ?
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (JobStatus.queued.value,),
+            ).fetchone()
+            if row is None:
+                return None
+
+            job = self._job_from_row(row)
+            assert isinstance(job, QueuedJob)
+
+            running = job.start(started_at=started_at)
+            self._upsert_metadata(running)
+            return running
 
     def requeue_running(self) -> None:
         running = [job for job in self.list_jobs() if isinstance(job, RunningJob)]
