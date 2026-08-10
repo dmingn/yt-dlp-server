@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from pydantic import AnyHttpUrl
 
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
@@ -16,6 +17,12 @@ from yt_dlp_server.models import (
     SucceededJob,
 )
 
+_URL_A = AnyHttpUrl("https://example.com/a")
+_URL_B = AnyHttpUrl("https://example.com/b")
+_URL_C = AnyHttpUrl("https://example.com/c")
+_URL_1 = AnyHttpUrl("https://example.com/1")
+_URL_2 = AnyHttpUrl("https://example.com/2")
+_URL_3 = AnyHttpUrl("https://example.com/3")
 _CREATED_AT = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
 _CREATED_AT_2 = datetime.fromisoformat("2026-01-02T00:00:00+00:00")
 _CREATED_AT_3 = datetime.fromisoformat("2026-01-03T00:00:00+00:00")
@@ -40,7 +47,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             QueuedJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
             ),
             id="queued",
@@ -48,7 +55,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             RunningJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 log=JobLog(),
@@ -58,7 +65,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             RunningJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 log=JobLog(lines=("line-1\n", "line-2\n")),
@@ -68,7 +75,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             SucceededJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -80,7 +87,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             FailedJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -93,7 +100,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             CancelledJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 finished_at=_FINISHED_AT,
                 log=JobLog(),
@@ -103,7 +110,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         pytest.param(
             CancelledJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -138,7 +145,7 @@ def test_append_log_respects_max_lines(tmp_path: Path) -> None:
         job_store.save_metadata(
             RunningJob(
                 id="job-1",
-                url="https://example.com/a",
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 log=JobLog(),
@@ -166,7 +173,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         job_store.save_metadata(
             SucceededJob(
                 id="older",
-                url="https://example.com/1",
+                url=_URL_1,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -177,7 +184,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         job_store.save_metadata(
             SucceededJob(
                 id="newer",
-                url="https://example.com/2",
+                url=_URL_2,
                 created_at=_CREATED_AT_2,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -190,7 +197,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="third",
-                url="https://example.com/3",
+                url=_URL_3,
                 created_at=_CREATED_AT_3,
             )
         )
@@ -211,7 +218,7 @@ def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="first",
-                url="https://example.com/1",
+                url=_URL_1,
                 created_at=_CREATED_AT,
             )
         )
@@ -220,7 +227,7 @@ def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="second",
-                url="https://example.com/2",
+                url=_URL_2,
                 created_at=_CREATED_AT_2,
             )
         )
@@ -240,7 +247,7 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
         job_store.save_metadata(
             SucceededJob(
                 id="job-1",
-                url="https://example.com/1",
+                url=_URL_1,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -254,7 +261,7 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="job-2",
-                url="https://example.com/2",
+                url=_URL_2,
                 created_at=_CREATED_AT_2,
             )
         )
@@ -279,14 +286,14 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
     job_store.save_metadata(
         QueuedJob(
             id="older",
-            url="https://example.com/a",
+            url=_URL_A,
             created_at=_CREATED_AT,
         )
     )
     job_store.save_metadata(
         QueuedJob(
             id="newer",
-            url="https://example.com/b",
+            url=_URL_B,
             created_at=_CREATED_AT_2,
         )
     )
@@ -310,7 +317,7 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     job_store.save_metadata(
         SucceededJob(
             id="job-1",
-            url="https://example.com/a",
+            url=_URL_A,
             created_at=_CREATED_AT,
             started_at=_STARTED_AT,
             finished_at=_FINISHED_AT,
@@ -321,7 +328,7 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     job_store.save_metadata(
         QueuedJob(
             id="job-2",
-            url="https://example.com/2",
+            url=_URL_2,
             created_at=_CREATED_AT_2,
         )
     )
@@ -339,7 +346,7 @@ def test_requeue_running_clears_logs(job_store: JobStore) -> None:
     job_store.save_metadata(
         RunningJob(
             id="job-1",
-            url="https://example.com/a",
+            url=_URL_A,
             created_at=_CREATED_AT,
             started_at=_STARTED_AT,
             log=JobLog(),
@@ -366,14 +373,14 @@ def test_list_jobs_orders_by_created_at_desc(job_store: JobStore) -> None:
     job_store.save_metadata(
         QueuedJob(
             id="older",
-            url="https://example.com/a",
+            url=_URL_A,
             created_at=_CREATED_AT,
         )
     )
     job_store.save_metadata(
         QueuedJob(
             id="newer",
-            url="https://example.com/b",
+            url=_URL_B,
             created_at=_CREATED_AT_2,
         )
     )
@@ -390,14 +397,14 @@ def test_unfinished_count(job_store: JobStore) -> None:
     job_store.save_metadata(
         QueuedJob(
             id="queued",
-            url="https://example.com/a",
+            url=_URL_A,
             created_at=_CREATED_AT,
         )
     )
     job_store.save_metadata(
         RunningJob(
             id="running",
-            url="https://example.com/b",
+            url=_URL_B,
             created_at=_CREATED_AT_2,
             started_at=_STARTED_AT_2,
             log=JobLog(),
@@ -406,7 +413,7 @@ def test_unfinished_count(job_store: JobStore) -> None:
     job_store.save_metadata(
         SucceededJob(
             id="done",
-            url="https://example.com/c",
+            url=_URL_C,
             created_at=_CREATED_AT_3,
             started_at=_STARTED_AT,
             finished_at=_FINISHED_AT,
@@ -424,7 +431,7 @@ def test_unfinished_ids_orders_by_created_at_asc(job_store: JobStore) -> None:
     job_store.save_metadata(
         SucceededJob(
             id="done",
-            url="https://example.com/a",
+            url=_URL_A,
             created_at=_CREATED_AT,
             started_at=_STARTED_AT,
             finished_at=_FINISHED_AT,
@@ -435,14 +442,14 @@ def test_unfinished_ids_orders_by_created_at_asc(job_store: JobStore) -> None:
     job_store.save_metadata(
         QueuedJob(
             id="older",
-            url="https://example.com/b",
+            url=_URL_B,
             created_at=_CREATED_AT_2,
         )
     )
     job_store.save_metadata(
         RunningJob(
             id="running",
-            url="https://example.com/c",
+            url=_URL_C,
             created_at=_CREATED_AT_3,
             started_at=_STARTED_AT_2,
             log=JobLog(),
