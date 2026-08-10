@@ -22,34 +22,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        store = JobStore(
+        with JobStore(
             max_jobs=settings.max_jobs,
             database_path=settings.database_path,
             max_log_lines=settings.max_log_lines,
-        )
-        store.requeue_running()
-        jobs = JobService(store)
-        jobs.rehydrate_queue()
-        app.state.jobs = jobs
-        app.state.settings = settings
+        ) as store:
+            store.requeue_running()
+            jobs = JobService(store)
+            jobs.rehydrate_queue()
+            app.state.jobs = jobs
+            app.state.settings = settings
 
-        tasks = [
-            asyncio.create_task(
-                worker(
-                    jobs,
-                    output_dir=settings.output_dir,
-                ),
-                name=f"worker-{i}",
-            )
-            for i in range(settings.n_workers)
-        ]
-        try:
-            yield
-        finally:
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            store.close()
+            tasks = [
+                asyncio.create_task(
+                    worker(
+                        jobs,
+                        output_dir=settings.output_dir,
+                    ),
+                    name=f"worker-{i}",
+                )
+                for i in range(settings.n_workers)
+            ]
+            try:
+                yield
+            finally:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
 
     app = FastAPI(title="yt-dlp-server", lifespan=lifespan)
     app.state.settings = settings
