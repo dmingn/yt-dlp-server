@@ -20,9 +20,6 @@ from yt_dlp_server.models import (
 _URL_A = AnyHttpUrl("https://example.com/a")
 _URL_B = AnyHttpUrl("https://example.com/b")
 _URL_C = AnyHttpUrl("https://example.com/c")
-_URL_1 = AnyHttpUrl("https://example.com/1")
-_URL_2 = AnyHttpUrl("https://example.com/2")
-_URL_3 = AnyHttpUrl("https://example.com/3")
 _CREATED_AT = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
 _CREATED_AT_2 = datetime.fromisoformat("2026-01-02T00:00:00+00:00")
 _CREATED_AT_3 = datetime.fromisoformat("2026-01-03T00:00:00+00:00")
@@ -173,7 +170,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         job_store.save_metadata(
             SucceededJob(
                 id="older",
-                url=_URL_1,
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -184,7 +181,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         job_store.save_metadata(
             SucceededJob(
                 id="newer",
-                url=_URL_2,
+                url=_URL_B,
                 created_at=_CREATED_AT_2,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -197,7 +194,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="third",
-                url=_URL_3,
+                url=_URL_C,
                 created_at=_CREATED_AT_3,
             )
         )
@@ -218,7 +215,7 @@ def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="first",
-                url=_URL_1,
+                url=_URL_A,
                 created_at=_CREATED_AT,
             )
         )
@@ -227,7 +224,7 @@ def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="second",
-                url=_URL_2,
+                url=_URL_B,
                 created_at=_CREATED_AT_2,
             )
         )
@@ -247,7 +244,7 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
         job_store.save_metadata(
             SucceededJob(
                 id="job-1",
-                url=_URL_1,
+                url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
@@ -261,7 +258,7 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
         job_store.save_metadata(
             QueuedJob(
                 id="job-2",
-                url=_URL_2,
+                url=_URL_B,
                 created_at=_CREATED_AT_2,
             )
         )
@@ -328,7 +325,7 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     job_store.save_metadata(
         QueuedJob(
             id="job-2",
-            url=_URL_2,
+            url=_URL_B,
             created_at=_CREATED_AT_2,
         )
     )
