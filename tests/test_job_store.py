@@ -10,6 +10,7 @@ from yt_dlp_server.models import (
     CancelledJob,
     FailedJob,
     Job,
+    JobId,
     JobLog,
     JobStatus,
     QueuedJob,
@@ -43,7 +44,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
     [
         pytest.param(
             QueuedJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
             ),
@@ -51,7 +52,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         ),
         pytest.param(
             RunningJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -61,7 +62,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         ),
         pytest.param(
             RunningJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -71,7 +72,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         ),
         pytest.param(
             SucceededJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -83,7 +84,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         ),
         pytest.param(
             FailedJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -96,7 +97,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         ),
         pytest.param(
             CancelledJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 finished_at=_FINISHED_AT,
@@ -106,7 +107,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
         ),
         pytest.param(
             CancelledJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -141,7 +142,7 @@ def test_append_log_respects_max_lines(tmp_path: Path) -> None:
     ) as job_store:
         job_store.save_metadata(
             RunningJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -150,12 +151,12 @@ def test_append_log_respects_max_lines(tmp_path: Path) -> None:
         )
 
         # Act
-        job_store.append_log("job-1", "a\n")
-        job_store.append_log("job-1", "b\n")
-        job_store.append_log("job-1", "c\n")
+        job_store.append_log(JobId("job-1"), "a\n")
+        job_store.append_log(JobId("job-1"), "b\n")
+        job_store.append_log(JobId("job-1"), "c\n")
 
         # Assert
-        loaded = job_store.get_job("job-1")
+        loaded = job_store.get_job(JobId("job-1"))
         assert isinstance(loaded, RunningJob)
         assert loaded.log.lines == ("b\n", "c\n")
 
@@ -169,7 +170,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
     ) as job_store:
         job_store.save_metadata(
             SucceededJob(
-                id="older",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -180,7 +181,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         )
         job_store.save_metadata(
             SucceededJob(
-                id="newer",
+                id=JobId("job-2"),
                 url=_URL_B,
                 created_at=_CREATED_AT_2,
                 started_at=_STARTED_AT,
@@ -193,16 +194,16 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         # Act
         job_store.save_metadata(
             QueuedJob(
-                id="third",
+                id=JobId("job-3"),
                 url=_URL_C,
                 created_at=_CREATED_AT_3,
             )
         )
 
         # Assert
-        assert job_store.get_job("older") is None
-        assert job_store.get_job("newer") is not None
-        assert job_store.get_job("third") is not None
+        assert job_store.get_job(JobId("job-1")) is None
+        assert job_store.get_job(JobId("job-2")) is not None
+        assert job_store.get_job(JobId("job-3")) is not None
 
 
 def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
@@ -214,7 +215,7 @@ def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
     ) as job_store:
         job_store.save_metadata(
             QueuedJob(
-                id="first",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
             )
@@ -223,15 +224,15 @@ def test_evict_does_not_remove_unfinished(tmp_path: Path) -> None:
         # Act
         job_store.save_metadata(
             QueuedJob(
-                id="second",
+                id=JobId("job-2"),
                 url=_URL_B,
                 created_at=_CREATED_AT_2,
             )
         )
 
         # Assert
-        assert job_store.get_job("first") is not None
-        assert job_store.get_job("second") is not None
+        assert job_store.get_job(JobId("job-1")) is not None
+        assert job_store.get_job(JobId("job-2")) is not None
 
 
 def test_evict_deletes_log_lines(tmp_path: Path) -> None:
@@ -243,7 +244,7 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
     ) as job_store:
         job_store.save_metadata(
             SucceededJob(
-                id="job-1",
+                id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
@@ -252,25 +253,25 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
                 log=JobLog(),
             )
         )
-        job_store.append_log("job-1", "keep?\n")
+        job_store.append_log(JobId("job-1"), "keep?\n")
 
         # Act
         job_store.save_metadata(
             QueuedJob(
-                id="job-2",
+                id=JobId("job-2"),
                 url=_URL_B,
                 created_at=_CREATED_AT_2,
             )
         )
 
         # Assert
-        assert job_store.get_job("job-1") is None
+        assert job_store.get_job(JobId("job-1")) is None
         remaining = job_store._conn.execute(
             "SELECT COUNT(*) AS n FROM job_log_lines WHERE job_id = ?",
             ("job-1",),
         ).fetchone()
         assert int(remaining["n"]) == 0
-        assert isinstance(job_store.get_job("job-2"), QueuedJob)
+        assert isinstance(job_store.get_job(JobId("job-2")), QueuedJob)
 
 
 def test_claim_oldest_queued_returns_none_when_empty(job_store: JobStore) -> None:
@@ -282,14 +283,14 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
     # Arrange
     job_store.save_metadata(
         QueuedJob(
-            id="older",
+            id=JobId("job-1"),
             url=_URL_A,
             created_at=_CREATED_AT,
         )
     )
     job_store.save_metadata(
         QueuedJob(
-            id="newer",
+            id=JobId("job-2"),
             url=_URL_B,
             created_at=_CREATED_AT_2,
         )
@@ -301,10 +302,10 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
 
     # Assert
     assert isinstance(first, RunningJob)
-    assert first.id == "older"
+    assert first.id == JobId("job-1")
     assert first.started_at == _STARTED_AT
     assert isinstance(second, RunningJob)
-    assert second.id == "newer"
+    assert second.id == JobId("job-2")
     assert second.started_at == _STARTED_AT_2
     assert job_store.claim_oldest_queued(started_at=_STARTED_AT) is None
 
@@ -313,7 +314,7 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
         SucceededJob(
-            id="job-1",
+            id=JobId("job-1"),
             url=_URL_A,
             created_at=_CREATED_AT,
             started_at=_STARTED_AT,
@@ -324,7 +325,7 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     )
     job_store.save_metadata(
         QueuedJob(
-            id="job-2",
+            id=JobId("job-2"),
             url=_URL_B,
             created_at=_CREATED_AT_2,
         )
@@ -342,20 +343,20 @@ def test_requeue_running_clears_logs(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
         RunningJob(
-            id="job-1",
+            id=JobId("job-1"),
             url=_URL_A,
             created_at=_CREATED_AT,
             started_at=_STARTED_AT,
             log=JobLog(),
         )
     )
-    job_store.append_log("job-1", "partial\n")
+    job_store.append_log(JobId("job-1"), "partial\n")
 
     # Act
     job_store.requeue_running()
 
     # Assert
-    loaded = job_store.get_job("job-1")
+    loaded = job_store.get_job(JobId("job-1"))
     assert isinstance(loaded, QueuedJob)
     assert loaded.status == JobStatus.queued
     remaining = job_store._conn.execute(
@@ -369,14 +370,14 @@ def test_list_jobs_orders_by_created_at_desc(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
         QueuedJob(
-            id="older",
+            id=JobId("job-1"),
             url=_URL_A,
             created_at=_CREATED_AT,
         )
     )
     job_store.save_metadata(
         QueuedJob(
-            id="newer",
+            id=JobId("job-2"),
             url=_URL_B,
             created_at=_CREATED_AT_2,
         )
@@ -386,21 +387,21 @@ def test_list_jobs_orders_by_created_at_desc(job_store: JobStore) -> None:
     jobs = job_store.list_jobs()
 
     # Assert
-    assert [job.id for job in jobs] == ["newer", "older"]
+    assert [job.id for job in jobs] == [JobId("job-2"), JobId("job-1")]
 
 
 def test_unfinished_count(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
         QueuedJob(
-            id="queued",
+            id=JobId("queued"),
             url=_URL_A,
             created_at=_CREATED_AT,
         )
     )
     job_store.save_metadata(
         RunningJob(
-            id="running",
+            id=JobId("running"),
             url=_URL_B,
             created_at=_CREATED_AT_2,
             started_at=_STARTED_AT_2,
@@ -409,7 +410,7 @@ def test_unfinished_count(job_store: JobStore) -> None:
     )
     job_store.save_metadata(
         SucceededJob(
-            id="done",
+            id=JobId("done"),
             url=_URL_C,
             created_at=_CREATED_AT_3,
             started_at=_STARTED_AT,
@@ -421,37 +422,3 @@ def test_unfinished_count(job_store: JobStore) -> None:
 
     # Act / Assert
     assert job_store.unfinished_count() == 2
-
-
-def test_unfinished_ids_orders_by_created_at_asc(job_store: JobStore) -> None:
-    # Arrange
-    job_store.save_metadata(
-        SucceededJob(
-            id="done",
-            url=_URL_A,
-            created_at=_CREATED_AT,
-            started_at=_STARTED_AT,
-            finished_at=_FINISHED_AT,
-            exit_code=0,
-            log=JobLog(),
-        )
-    )
-    job_store.save_metadata(
-        QueuedJob(
-            id="older",
-            url=_URL_B,
-            created_at=_CREATED_AT_2,
-        )
-    )
-    job_store.save_metadata(
-        RunningJob(
-            id="running",
-            url=_URL_C,
-            created_at=_CREATED_AT_3,
-            started_at=_STARTED_AT_2,
-            log=JobLog(),
-        )
-    )
-
-    # Act / Assert
-    assert job_store.unfinished_ids() == ["older", "running"]

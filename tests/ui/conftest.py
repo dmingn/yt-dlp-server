@@ -30,12 +30,12 @@ def live_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> LiveServerFa
     @contextmanager
     def _start(*, block_seconds: int = 0) -> Iterator[str]:
         monkeypatch.setattr(
-            "yt_dlp_server.worker.build_yt_dlp_cmd",
+            "yt_dlp_server.process_job.build_yt_dlp_cmd",
             lambda **kwargs: ("sleep", str(block_seconds)),
         )
         app = create_app(
             Settings(
-                n_workers=1,
+                max_running=1,
                 database_path=tmp_path / "jobs.sqlite3",
             )
         )
@@ -79,7 +79,7 @@ def live_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> LiveServerFa
 @pytest.fixture
 def page() -> Iterator[Page]:
     # Function-scoped Playwright so the sync API event loop does not outlive
-    # the test and break pytest-asyncio worker tests in the same session.
+    # the test and break other pytest-asyncio tests in the same session.
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         context = browser.new_context()

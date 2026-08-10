@@ -13,6 +13,6 @@ services:
       - "./out:/out"
       - "./data:/data"
     environment:
-      N_WORKERS: "1"
+      MAX_RUNNING: "1"
       OUTPUT_DIR: "/out"
       DATABASE_PATH: "/data/jobs.sqlite3"

@@ -11,6 +11,7 @@ from yt_dlp_server.models import (
     JOB_ADAPTER,
     UNFINISHED_STATUSES,
     Job,
+    JobId,
     JobLog,
     JobStatus,
     QueuedJob,
@@ -50,7 +51,7 @@ class JobStore:
             self._upsert_metadata(job)
         self._evict_finished()
 
-    def get_job(self, job_id: str) -> Job | None:
+    def get_job(self, job_id: JobId) -> Job | None:
         row = self._conn.execute(
             "SELECT * FROM jobs WHERE id = ?",
             (job_id,),
@@ -73,7 +74,7 @@ class JobStore:
         ).fetchone()
         return int(row["n"])
 
-    def append_log(self, job_id: str, line: str) -> None:
+    def append_log(self, job_id: JobId, line: str) -> None:
         with self._conn:
             next_seq_row = self._conn.execute(
                 "SELECT COALESCE(MAX(seq), 0) AS max_seq FROM job_log_lines WHERE job_id = ?",
@@ -94,18 +95,6 @@ class JobStore:
                 """,
                 (job_id, job_id, self._max_log_lines),
             )
-
-    def unfinished_ids(self) -> list[str]:
-        placeholders = ",".join("?" * len(UNFINISHED_STATUSES))
-        rows = self._conn.execute(
-            f"""
-            SELECT id FROM jobs
-            WHERE status IN ({placeholders})
-            ORDER BY created_at ASC
-            """,
-            UNFINISHED_STATUSES,
-        ).fetchall()
-        return [str(row["id"]) for row in rows]
 
     def claim_oldest_queued(self, *, started_at: datetime) -> RunningJob | None:
         """Take ownership of the oldest queued job by marking it running."""
@@ -190,7 +179,7 @@ class JobStore:
                     return
                 self._conn.execute("DELETE FROM jobs WHERE id = ?", (oldest["id"],))
 
-    def _log_lines(self, job_id: str) -> tuple[str, ...]:
+    def _log_lines(self, job_id: JobId) -> tuple[str, ...]:
         rows = self._conn.execute(
             """
             SELECT line FROM job_log_lines
@@ -205,6 +194,6 @@ class JobStore:
         return JOB_ADAPTER.validate_python(
             {
                 **dict(row),
-                "log": JobLog(lines=self._log_lines(str(row["id"]))),
+                "log": JobLog(lines=self._log_lines(JobId(str(row["id"])))),
             }
         )
