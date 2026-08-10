@@ -1,8 +1,10 @@
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Literal, assert_never, get_args
+from typing import Annotated, Literal, NewType, assert_never, get_args
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter
+
+JobId = NewType("JobId", str)
 
 
 class JobStatus(str, Enum):
@@ -25,7 +27,7 @@ class JobLog(BaseModel):
 class _JobBase(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    id: str
+    id: JobId
     url: AnyHttpUrl
     created_at: datetime
 
@@ -147,7 +149,7 @@ FINISHED_STATUSES = tuple(
 
 
 class JobSummary(BaseModel):
-    id: str
+    id: JobId
     url: AnyHttpUrl
     status: JobStatus
     created_at: datetime

@@ -2,12 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import AnyHttpUrl, BaseModel
 
 from yt_dlp_server.job_service import JobCapacityFull, JobService
-from yt_dlp_server.models import (
-    CancelledJob,
-    Job,
-    JobSummary,
-    QueuedJob,
-)
+from yt_dlp_server.models import CancelledJob, Job, JobId, JobSummary
 
 
 class CreateJobRequest(BaseModel):
@@ -15,28 +10,36 @@ class CreateJobRequest(BaseModel):
 
 
 class GetJobRequest(BaseModel):
-    id: str
+    id: JobId
 
 
 class CancelJobRequest(BaseModel):
-    id: str
+    id: JobId
 
 
 router = APIRouter(prefix="/api")
 
 
 def _job_service_from_request(request: Request) -> JobService:
-    jobs = request.app.state.jobs
-    assert isinstance(jobs, JobService)
-    return jobs
+    job_service = request.app.state.job_service
+    assert isinstance(job_service, JobService)
+    return job_service
 
 
 @router.post("/createJob", response_model=Job, status_code=201)
-async def create_job(body: CreateJobRequest, request: Request) -> QueuedJob:
+async def create_job(body: CreateJobRequest, request: Request) -> Job:
+    job_service = _job_service_from_request(request)
+
     try:
-        return _job_service_from_request(request).enqueue(str(body.url))
+        job_id = await job_service.submit(str(body.url))
     except JobCapacityFull:
         raise HTTPException(status_code=503, detail="Job capacity full") from None
+
+    job = job_service.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=500, detail="Created job not found")
+
+    return job
 
 
 @router.post("/listJobs", response_model=list[JobSummary])
@@ -54,10 +57,13 @@ async def get_job(body: GetJobRequest, request: Request) -> Job:
 
 @router.post("/cancelJob", response_model=Job)
 async def cancel_job(body: CancelJobRequest, request: Request) -> CancelledJob:
-    jobs = _job_service_from_request(request)
-    if jobs.get(body.id) is None:
+    job_service = _job_service_from_request(request)
+
+    if job_service.get(body.id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    cancelled = await jobs.cancel(body.id)
+
+    cancelled = await job_service.cancel(body.id)
     if cancelled is None:
         raise HTTPException(status_code=409, detail="Job already finished")
+
     return cancelled

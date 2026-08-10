@@ -1,17 +1,25 @@
-import asyncio
+from __future__ import annotations
+
 import uuid
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
+from typing import assert_never
 
 from yt_dlp_server.job_store import JobStore
+from yt_dlp_server.job_task_manager import JobTaskManager
 from yt_dlp_server.models import (
     CancelledJob,
     FailedJob,
+    FinishedJob,
     Job,
+    JobId,
     JobSummary,
     QueuedJob,
     RunningJob,
     SucceededJob,
 )
+
+ProcessJobFn = Callable[["JobService", JobId], Coroutine[object, object, None]]
 
 
 class JobCapacityFull(Exception):
@@ -23,62 +31,55 @@ def _utcnow() -> datetime:
 
 
 class JobService:
-    def __init__(self, store: JobStore) -> None:
+    def __init__(
+        self,
+        store: JobStore,
+        *,
+        max_running: int,
+        process_job_fn: ProcessJobFn,
+    ) -> None:
         self._store = store
-        self._queue: asyncio.Queue[str] = asyncio.Queue()
-        self._running_tasks: dict[str, asyncio.Task[None]] = {}
+        self._task_manager = JobTaskManager(
+            max_running=max_running,
+            claim_next_job_fn=self._claim_next_job,
+            process_job_fn=lambda job_id: process_job_fn(self, job_id),
+        )
+
+    def _claim_next_job(self) -> JobId | None:
+        claimed = self._store.claim_oldest_queued(started_at=_utcnow())
+        return None if claimed is None else claimed.id
 
     def enqueue(self, url: str) -> QueuedJob:
         if self._store.unfinished_count() >= self._store.max_jobs:
             raise JobCapacityFull()
         job = QueuedJob.model_validate(
             {
-                "id": str(uuid.uuid4()),
+                "id": JobId(str(uuid.uuid4())),
                 "url": url,
                 "created_at": _utcnow(),
             }
         )
         self._store.save_metadata(job)
-        self._queue.put_nowait(job.id)
         return job
 
-    async def claim_next(self) -> str:
-        return await self._queue.get()
+    async def submit(self, url: str) -> JobId:
+        job = self.enqueue(url)
+        await self._task_manager.claim_queued_jobs_up_to_max_running()
+        return job.id
 
-    def task_done(self) -> None:
-        self._queue.task_done()
-
-    def set_running_task(self, job_id: str, task: asyncio.Task[None]) -> None:
-        self._running_tasks[job_id] = task
-
-    def clear_running_task(self, job_id: str) -> None:
-        self._running_tasks.pop(job_id, None)
-
-    def get(self, job_id: str) -> Job | None:
+    def get(self, job_id: JobId) -> Job | None:
         return self._store.get_job(job_id)
 
     def list_summaries(self) -> list[JobSummary]:
         return [JobSummary.from_job(job) for job in self._store.list_jobs()]
 
-    def mark_running(self, job_id: str) -> RunningJob | None:
-        job = self._store.get_job(job_id)
-        if not isinstance(job, QueuedJob):
-            return None
-        running = job.start(started_at=_utcnow())
-        self._store.save_metadata(running)
-        return running
-
-    def append_log_line(self, job_id: str, line: str) -> None:
+    def append_log_line(self, job_id: JobId, line: str) -> None:
         job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return
         self._store.append_log(job_id, line)
 
-    def rehydrate_queue(self) -> None:
-        for job_id in self._store.unfinished_ids():
-            self._queue.put_nowait(job_id)
-
-    def mark_succeeded(self, job_id: str) -> SucceededJob | None:
+    def mark_succeeded(self, job_id: JobId) -> SucceededJob | None:
         job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
@@ -88,7 +89,7 @@ class JobService:
 
     def mark_failed(
         self,
-        job_id: str,
+        job_id: JobId,
         *,
         error: str,
         exit_code: int | None = None,
@@ -104,27 +105,30 @@ class JobService:
         self._store.save_metadata(failed)
         return failed
 
-    def mark_cancelled(self, job_id: str) -> CancelledJob | None:
+    async def cancel(self, job_id: JobId) -> CancelledJob | None:
         job = self._store.get_job(job_id)
-        if not isinstance(job, RunningJob):
-            return None
-        cancelled = job.cancel(finished_at=_utcnow())
-        self._store.save_metadata(cancelled)
-        return cancelled
 
-    async def cancel(self, job_id: str) -> CancelledJob | None:
-        job = self._store.get_job(job_id)
+        if job is None:
+            return None
+        if isinstance(job, FinishedJob):
+            return None
+
         if isinstance(job, QueuedJob):
             cancelled = job.cancel(finished_at=_utcnow())
             self._store.save_metadata(cancelled)
             return cancelled
-        if not isinstance(job, RunningJob):
-            return None
-        running_cancelled = self.mark_cancelled(job_id)
-        if running_cancelled is None:
-            return None
-        task = self._running_tasks.get(job_id)
-        if task is not None and not task.done():
-            task.cancel()
-            await asyncio.wait({task})
-        return running_cancelled
+
+        if isinstance(job, RunningJob):
+            cancelled = job.cancel(finished_at=_utcnow())
+            self._store.save_metadata(cancelled)
+            await self._task_manager.cancel(job_id)
+            return cancelled
+
+        assert_never(job)
+
+    async def requeue_unfinished_jobs(self) -> None:
+        self._store.requeue_running()
+        await self._task_manager.claim_queued_jobs_up_to_max_running()
+
+    async def shutdown(self) -> None:
+        await self._task_manager.shutdown()
