@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Self
 
 from yt_dlp_server.db import connect
 from yt_dlp_server.models import (
@@ -37,6 +38,12 @@ class JobStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
 
     def save_metadata(self, job: Job) -> None:
         with self._conn:

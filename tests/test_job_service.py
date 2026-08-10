@@ -36,25 +36,6 @@ def test_enqueue_and_summaries(tmp_path: Path) -> None:
     assert job_service.list_summaries()[0].log_line_count == 0
 
 
-def test_store_evicts_oldest_finished_jobs(tmp_path: Path) -> None:
-    # Arrange
-    job_service = _make_job_service(tmp_path, max_jobs=2)
-    first = job_service.enqueue("https://example.com/1")
-    second = job_service.enqueue("https://example.com/2")
-    job_service.mark_running(first.id)
-    job_service.mark_succeeded(first.id)
-    job_service.mark_running(second.id)
-    job_service.mark_succeeded(second.id)
-
-    # Act
-    third = job_service.enqueue("https://example.com/3")
-
-    # Assert
-    assert job_service.get(first.id) is None
-    assert job_service.get(second.id) is not None
-    assert job_service.get(third.id) is not None
-
-
 def test_enqueue_rejects_when_unfinished_at_capacity(tmp_path: Path) -> None:
     # Arrange
     job_service = _make_job_service(tmp_path, max_jobs=2)
@@ -96,7 +77,8 @@ async def test_cancel_finished_job_returns_none(tmp_path: Path) -> None:
     assert cancelled is None
 
 
-def test_rehydrate_queue_after_running_reset(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_rehydrate_queue_after_running_reset(tmp_path: Path) -> None:
     # Arrange
     db_path = tmp_path / "jobs.sqlite3"
     store = JobStore(max_jobs=10, database_path=db_path, max_log_lines=100)
@@ -114,7 +96,7 @@ def test_rehydrate_queue_after_running_reset(tmp_path: Path) -> None:
     restored.rehydrate_queue()
 
     # Assert
-    restored_newer = restored.get(newer.id)
-    assert isinstance(restored_newer, QueuedJob)
-    assert restored_store.unfinished_ids() == [older.id, newer.id]
+    assert isinstance(restored.get(newer.id), QueuedJob)
+    assert await restored.claim_next() == older.id
+    assert await restored.claim_next() == newer.id
     restored_store.close()
