@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
@@ -21,6 +23,8 @@ from yt_dlp_server.models import (
 
 ProcessJobFn = Callable[["JobService", JobId], Coroutine[object, object, None]]
 
+_logger = logging.getLogger(__name__)
+
 
 class JobCapacityFull(Exception):
     """Raised when unfinished jobs already reach max_jobs."""
@@ -37,17 +41,15 @@ class JobService:
         *,
         max_running: int,
         process_job_fn: ProcessJobFn,
+        poll_interval_seconds: float = 1,
     ) -> None:
         self._store = store
+        self._max_running = max_running
+        self._poll_interval_seconds = poll_interval_seconds
         self._task_manager = JobTaskManager(
-            max_running=max_running,
-            claim_next_job_fn=self._claim_next_job,
             process_job_fn=lambda job_id: process_job_fn(self, job_id),
         )
-
-    def _claim_next_job(self) -> JobId | None:
-        claimed = self._store.claim_oldest_queued(started_at=_utcnow())
-        return None if claimed is None else claimed.id
+        self._poll_task: asyncio.Task[None] | None = None
 
     def enqueue(self, url: str) -> QueuedJob:
         if self._store.unfinished_count() >= self._store.max_jobs:
@@ -63,9 +65,17 @@ class JobService:
         return job
 
     async def submit(self, url: str) -> JobId:
-        job = self.enqueue(url)
-        await self._task_manager.claim_queued_jobs_up_to_max_running()
-        return job.id
+        return self.enqueue(url).id
+
+    def try_start_jobs(self) -> None:
+        while (
+            not self._task_manager.closed
+            and self._task_manager.running_count < self._max_running
+        ):
+            claimed = self._store.claim_oldest_queued(started_at=_utcnow())
+            if claimed is None:
+                return
+            self._task_manager.spawn(claimed.id)
 
     def get(self, job_id: JobId) -> Job | None:
         return self._store.get_job(job_id)
@@ -126,9 +136,31 @@ class JobService:
 
         assert_never(job)
 
-    async def requeue_unfinished_jobs(self) -> None:
+    def requeue_unfinished_jobs(self) -> None:
         self._store.requeue_running()
-        await self._task_manager.claim_queued_jobs_up_to_max_running()
+
+    async def start_polling(self) -> None:
+        if self._poll_task is not None:
+            return
+        self._poll_task = asyncio.create_task(
+            self._poll_loop(),
+            name="try-start-jobs",
+        )
+
+    async def _poll_loop(self) -> None:
+        while True:
+            try:
+                self.try_start_jobs()
+            except Exception:
+                _logger.exception("try_start_jobs failed")
+            await asyncio.sleep(self._poll_interval_seconds)
 
     async def shutdown(self) -> None:
+        if self._poll_task is not None:
+            self._poll_task.cancel()
+            try:
+                await self._poll_task
+            except asyncio.CancelledError:
+                pass
+            self._poll_task = None
         await self._task_manager.shutdown()
