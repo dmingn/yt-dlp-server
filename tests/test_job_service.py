@@ -36,6 +36,7 @@ def make_job_service(tmp_path: Path) -> Callable[..., JobService]:
         max_log_lines: int = 2000,
         max_running: int = 0,
         process_job_fn: ProcessJobFn | None = None,
+        poll_interval_seconds: float = 1,
     ) -> JobService:
         store = JobStore(
             max_jobs=max_jobs,
@@ -46,6 +47,7 @@ def make_job_service(tmp_path: Path) -> Callable[..., JobService]:
             store,
             max_running=max_running,
             process_job_fn=process_job_fn or _noop_process_job,
+            poll_interval_seconds=poll_interval_seconds,
         )
 
     return _make
@@ -79,11 +81,11 @@ def test_enqueue_rejects_when_unfinished_at_capacity(
 
 
 @pytest.mark.asyncio
-async def test_submit_returns_job_id(
+async def test_submit_leaves_job_queued(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
-    job_service = make_job_service(max_running=0)
+    job_service = make_job_service(max_running=1)
 
     # Act
     job_id = await job_service.submit("https://example.com/a")
@@ -95,7 +97,7 @@ async def test_submit_returns_job_id(
 
 
 @pytest.mark.asyncio
-async def test_submit_claims_queued_job(
+async def test_try_start_jobs_starts_queued_up_to_max_running(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
@@ -103,12 +105,107 @@ async def test_submit_claims_queued_job(
         await asyncio.Future()
 
     job_service = make_job_service(max_running=1, process_job_fn=hang)
+    first_id = await job_service.submit("https://example.com/a")
+    second_id = await job_service.submit("https://example.com/b")
 
     # Act
-    job_id = await job_service.submit("https://example.com/a")
+    job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(job_id), RunningJob)
+    assert isinstance(job_service.get(first_id), RunningJob)
+    assert isinstance(job_service.get(second_id), QueuedJob)
+    await job_service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_try_start_jobs_after_shutdown_does_not_claim(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    job_service = make_job_service(max_running=1)
+    job_id = await job_service.submit("https://example.com/a")
+    await job_service.shutdown()
+
+    # Act
+    job_service.try_start_jobs()
+
+    # Assert
+    assert isinstance(job_service.get(job_id), QueuedJob)
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_continues_after_try_start_jobs_raises(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    job_began = asyncio.Event()
+
+    async def hang(_job_service: JobService, _job_id: JobId) -> None:
+        job_began.set()
+        await asyncio.Future()
+
+    job_service = make_job_service(
+        max_running=1,
+        process_job_fn=hang,
+        poll_interval_seconds=0.01,
+    )
+    calls = 0
+    original = job_service.try_start_jobs
+
+    def flaky_try_start_jobs() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("boom")
+        original()
+
+    job_service.try_start_jobs = flaky_try_start_jobs  # type: ignore[method-assign]
+    await job_service.submit("https://example.com/a")
+
+    # Act
+    await job_service.start_polling()
+    await asyncio.wait_for(job_began.wait(), timeout=1)
+
+    # Assert
+    assert calls >= 2
+    await job_service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_try_start_jobs_starts_next_after_slot_frees(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    first_began = asyncio.Event()
+    second_began = asyncio.Event()
+    allow_finish = asyncio.Event()
+    started: list[JobId] = []
+
+    async def process(_job_service: JobService, job_id: JobId) -> None:
+        started.append(job_id)
+        if len(started) == 1:
+            first_began.set()
+            await allow_finish.wait()
+            return
+        second_began.set()
+        await asyncio.Future()
+
+    job_service = make_job_service(max_running=1, process_job_fn=process)
+    first_id = await job_service.submit("https://example.com/a")
+    second_id = await job_service.submit("https://example.com/b")
+    job_service.try_start_jobs()
+    await first_began.wait()
+    first_task = job_service._task_manager._running_tasks[first_id]
+
+    # Act
+    allow_finish.set()
+    await first_task
+    job_service.try_start_jobs()
+    await second_began.wait()
+
+    # Assert
+    assert started == [first_id, second_id]
+    assert isinstance(job_service.get(second_id), RunningJob)
     await job_service.shutdown()
 
 
@@ -150,6 +247,7 @@ async def test_cancel_running_job_marks_cancelled(
         process_job_fn=hang_until_cancelled,
     )
     job_id = await job_service.submit("https://example.com/video")
+    job_service.try_start_jobs()
     await job_began.wait()
 
     # Act
@@ -220,7 +318,7 @@ async def test_requeue_unfinished_jobs_requeues_running(tmp_path: Path) -> None:
         )
 
         # Act
-        await job_service.requeue_unfinished_jobs()
+        job_service.requeue_unfinished_jobs()
 
         # Assert
         assert isinstance(job_service.get(job_id), QueuedJob)
