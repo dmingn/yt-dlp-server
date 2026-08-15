@@ -16,7 +16,8 @@ class Settings(BaseSettings):
         default=100,
         ge=1,
         description=(
-            "Max unfinished (queued/running) jobs; also max retained finished jobs"
+            "Max unfinished (queued/scheduled/running) jobs; "
+            "also max retained finished jobs"
         ),
     )
     max_log_lines: int = Field(default=2000, ge=1)

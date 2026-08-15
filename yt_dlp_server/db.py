@@ -2,7 +2,7 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _Upgrade = Callable[[sqlite3.Connection], None]
 
@@ -38,7 +38,14 @@ def _migrate_to_1(conn: sqlite3.Connection) -> None:
     )
 
 
-_MIGRATIONS: tuple[tuple[int, _Upgrade], ...] = ((1, _migrate_to_1),)
+def _migrate_to_2(conn: sqlite3.Connection) -> None:
+    conn.execute("ALTER TABLE jobs ADD COLUMN scheduled_at TEXT")
+
+
+_MIGRATIONS: tuple[tuple[int, _Upgrade], ...] = (
+    (1, _migrate_to_1),
+    (2, _migrate_to_2),
+)
 
 
 def migrate(conn: sqlite3.Connection) -> None:

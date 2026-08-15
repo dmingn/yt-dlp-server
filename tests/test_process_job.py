@@ -11,6 +11,7 @@ from yt_dlp_server.job_service import JobService
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
     FailedJob,
+    ImmediateRunningJob,
     JobId,
     JobLog,
     JobStatus,
@@ -38,7 +39,7 @@ def running_job_service(tmp_path: Path) -> Iterator[tuple[JobService, JobId]]:
         max_log_lines=2000,
     ) as store:
         store.save_metadata(
-            RunningJob(
+            ImmediateRunningJob(
                 id=job_id,
                 url=_URL,
                 created_at=_CREATED,

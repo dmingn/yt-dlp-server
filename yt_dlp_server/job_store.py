@@ -10,6 +10,7 @@ from yt_dlp_server.models import (
     FINISHED_STATUSES,
     JOB_ADAPTER,
     UNFINISHED_STATUSES,
+    ImmediateRunningJob,
     Job,
     JobId,
     JobLog,
@@ -96,7 +97,9 @@ class JobStore:
                 (job_id, job_id, self._max_log_lines),
             )
 
-    def claim_oldest_queued(self, *, started_at: datetime) -> RunningJob | None:
+    def claim_oldest_queued(
+        self, *, started_at: datetime
+    ) -> ImmediateRunningJob | None:
         """Take ownership of the oldest queued job by marking it running."""
         with self._conn:
             row = self._conn.execute(
@@ -118,11 +121,11 @@ class JobStore:
             self._upsert_metadata(running)
             return running
 
-    def requeue_running(self) -> None:
+    def restore_waiting_jobs(self) -> None:
         running = [job for job in self.list_jobs() if isinstance(job, RunningJob)]
         for job in running:
             with self._conn:
-                self._upsert_metadata(job.requeue())
+                self._upsert_metadata(job.to_waiting())
                 self._conn.execute(
                     "DELETE FROM job_log_lines WHERE job_id = ?",
                     (job.id,),
@@ -134,8 +137,9 @@ class JobStore:
         self._conn.execute(
             """
             INSERT INTO jobs (
-              id, url, status, created_at, started_at, finished_at, exit_code, error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              id, url, status, created_at, started_at, finished_at,
+              exit_code, error, scheduled_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               url = excluded.url,
               status = excluded.status,
@@ -143,7 +147,8 @@ class JobStore:
               started_at = excluded.started_at,
               finished_at = excluded.finished_at,
               exit_code = excluded.exit_code,
-              error = excluded.error
+              error = excluded.error,
+              scheduled_at = excluded.scheduled_at
             """,
             (
                 row["id"],
@@ -154,6 +159,7 @@ class JobStore:
                 row.get("finished_at"),
                 row.get("exit_code"),
                 row.get("error"),
+                row.get("scheduled_at"),
             ),
         )
 
