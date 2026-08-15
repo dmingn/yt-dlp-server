@@ -55,7 +55,7 @@ async def get_job(body: GetJobRequest, request: Request) -> Job:
     return job
 
 
-@router.post("/cancelJob", response_model=Job)
+@router.post("/cancelJob", response_model=CancelledJob)
 async def cancel_job(body: CancelJobRequest, request: Request) -> CancelledJob:
     job_service = _job_service_from_request(request)
 
