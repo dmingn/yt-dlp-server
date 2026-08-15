@@ -10,12 +10,15 @@ from yt_dlp_server.job_service import JobCapacityFull, JobService, ProcessJobFn
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
     CancelledJob,
+    ImmediateRunningJob,
+    ImmediateSucceededJob,
     JobId,
     JobLog,
     JobStatus,
     QueuedJob,
     RunningJob,
-    SucceededJob,
+    ScheduledJob,
+    ScheduledRunningJob,
 )
 
 _URL = AnyHttpUrl("https://example.com/video")
@@ -272,7 +275,7 @@ async def test_cancel_finished_job_returns_none(tmp_path: Path) -> None:
         max_log_lines=2000,
     ) as store:
         store.save_metadata(
-            SucceededJob(
+            ImmediateSucceededJob(
                 id=job_id,
                 url=_URL,
                 created_at=_CREATED,
@@ -296,21 +299,51 @@ async def test_cancel_finished_job_returns_none(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_requeue_unfinished_jobs_requeues_running(tmp_path: Path) -> None:
-    # Arrange
-    job_id = JobId("running")
-    db_path = tmp_path / "jobs.sqlite3"
-
-    with JobStore(max_jobs=10, database_path=db_path, max_log_lines=100) as store:
-        store.save_metadata(
-            RunningJob(
-                id=job_id,
+@pytest.mark.parametrize(
+    ("running", "expected"),
+    [
+        (
+            ImmediateRunningJob(
+                id=JobId("running"),
                 url=_URL,
                 created_at=_CREATED,
                 started_at=_STARTED,
                 log=JobLog(),
-            )
-        )
+            ),
+            QueuedJob(
+                id=JobId("running"),
+                url=_URL,
+                created_at=_CREATED,
+            ),
+        ),
+        (
+            ScheduledRunningJob(
+                id=JobId("running"),
+                url=_URL,
+                created_at=_CREATED,
+                started_at=_STARTED,
+                scheduled_at=datetime.fromisoformat("2026-01-01T03:00:00+00:00"),
+                log=JobLog(),
+            ),
+            ScheduledJob(
+                id=JobId("running"),
+                url=_URL,
+                created_at=_CREATED,
+                scheduled_at=datetime.fromisoformat("2026-01-01T03:00:00+00:00"),
+            ),
+        ),
+    ],
+)
+async def test_restore_waiting_jobs_from_running(
+    tmp_path: Path,
+    running: RunningJob,
+    expected: QueuedJob | ScheduledJob,
+) -> None:
+    # Arrange
+    db_path = tmp_path / "jobs.sqlite3"
+
+    with JobStore(max_jobs=10, database_path=db_path, max_log_lines=100) as store:
+        store.save_metadata(running)
         job_service = JobService(
             store,
             max_running=0,
@@ -318,7 +351,7 @@ async def test_requeue_unfinished_jobs_requeues_running(tmp_path: Path) -> None:
         )
 
         # Act
-        job_service.requeue_unfinished_jobs()
+        job_service.restore_waiting_jobs()
 
         # Assert
-        assert isinstance(job_service.get(job_id), QueuedJob)
+        assert job_service.get(running.id) == expected

@@ -35,7 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     output_dir=settings.output_dir,
                 ),
             )
-            job_service.requeue_unfinished_jobs()
+            job_service.restore_waiting_jobs()
             await job_service.start_polling()
             app.state.job_service = job_service
             app.state.settings = settings

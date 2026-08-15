@@ -7,15 +7,20 @@ from pydantic import AnyHttpUrl
 
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
-    CancelledJob,
-    FailedJob,
+    ImmediateCancelledJob,
+    ImmediateFailedJob,
+    ImmediateRunningJob,
+    ImmediateSucceededJob,
     Job,
     JobId,
     JobLog,
-    JobStatus,
     QueuedJob,
     RunningJob,
-    SucceededJob,
+    ScheduledCancelledJob,
+    ScheduledFailedJob,
+    ScheduledJob,
+    ScheduledRunningJob,
+    ScheduledSucceededJob,
 )
 
 _URL_A = AnyHttpUrl("https://example.com/a")
@@ -51,7 +56,65 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
             id="queued",
         ),
         pytest.param(
-            RunningJob(
+            ScheduledJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                scheduled_at=_CREATED_AT_2,
+            ),
+            id="scheduled",
+        ),
+        pytest.param(
+            ScheduledRunningJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                started_at=_STARTED_AT,
+                scheduled_at=_CREATED_AT_2,
+                log=JobLog(),
+            ),
+            id="running-scheduled",
+        ),
+        pytest.param(
+            ScheduledSucceededJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                started_at=_STARTED_AT,
+                finished_at=_FINISHED_AT,
+                exit_code=0,
+                scheduled_at=_CREATED_AT_2,
+                log=JobLog(lines=("done\n",)),
+            ),
+            id="succeeded-scheduled",
+        ),
+        pytest.param(
+            ScheduledFailedJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                started_at=_STARTED_AT,
+                finished_at=_FINISHED_AT,
+                exit_code=1,
+                scheduled_at=_CREATED_AT_2,
+                log=JobLog(lines=("err\n",)),
+                error="boom",
+            ),
+            id="failed-scheduled",
+        ),
+        pytest.param(
+            ScheduledCancelledJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                finished_at=_FINISHED_AT,
+                scheduled_at=_CREATED_AT_2,
+                log=JobLog(),
+            ),
+            id="cancelled-scheduled",
+        ),
+        pytest.param(
+            ImmediateRunningJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -61,7 +124,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
             id="running",
         ),
         pytest.param(
-            RunningJob(
+            ImmediateRunningJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -71,7 +134,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
             id="running-with-logs",
         ),
         pytest.param(
-            SucceededJob(
+            ImmediateSucceededJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -83,7 +146,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
             id="succeeded",
         ),
         pytest.param(
-            FailedJob(
+            ImmediateFailedJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -96,7 +159,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
             id="failed",
         ),
         pytest.param(
-            CancelledJob(
+            ImmediateCancelledJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -106,7 +169,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
             id="cancelled",
         ),
         pytest.param(
-            CancelledJob(
+            ImmediateCancelledJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -141,7 +204,7 @@ def test_append_log_respects_max_lines(tmp_path: Path) -> None:
         max_log_lines=2,
     ) as job_store:
         job_store.save_metadata(
-            RunningJob(
+            ImmediateRunningJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -169,7 +232,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
         max_log_lines=100,
     ) as job_store:
         job_store.save_metadata(
-            SucceededJob(
+            ImmediateSucceededJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -180,7 +243,7 @@ def test_evict_removes_oldest_finished(tmp_path: Path) -> None:
             )
         )
         job_store.save_metadata(
-            SucceededJob(
+            ImmediateSucceededJob(
                 id=JobId("job-2"),
                 url=_URL_B,
                 created_at=_CREATED_AT_2,
@@ -243,7 +306,7 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
         max_log_lines=100,
     ) as job_store:
         job_store.save_metadata(
-            SucceededJob(
+            ImmediateSucceededJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
@@ -313,7 +376,7 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
 def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
-        SucceededJob(
+        ImmediateSucceededJob(
             id=JobId("job-1"),
             url=_URL_A,
             created_at=_CREATED_AT,
@@ -339,26 +402,55 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     assert claimed.id == "job-2"
 
 
-def test_requeue_running_clears_logs(job_store: JobStore) -> None:
+@pytest.mark.parametrize(
+    ("running", "expected"),
+    [
+        (
+            ImmediateRunningJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                started_at=_STARTED_AT,
+                log=JobLog(),
+            ),
+            QueuedJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+            ),
+        ),
+        (
+            ScheduledRunningJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                started_at=_STARTED_AT,
+                scheduled_at=_CREATED_AT_2,
+                log=JobLog(),
+            ),
+            ScheduledJob(
+                id=JobId("job-1"),
+                url=_URL_A,
+                created_at=_CREATED_AT,
+                scheduled_at=_CREATED_AT_2,
+            ),
+        ),
+    ],
+)
+def test_restore_waiting_jobs_from_running(
+    job_store: JobStore,
+    running: RunningJob,
+    expected: QueuedJob | ScheduledJob,
+) -> None:
     # Arrange
-    job_store.save_metadata(
-        RunningJob(
-            id=JobId("job-1"),
-            url=_URL_A,
-            created_at=_CREATED_AT,
-            started_at=_STARTED_AT,
-            log=JobLog(),
-        )
-    )
+    job_store.save_metadata(running)
     job_store.append_log(JobId("job-1"), "partial\n")
 
     # Act
-    job_store.requeue_running()
+    job_store.restore_waiting_jobs()
 
     # Assert
-    loaded = job_store.get_job(JobId("job-1"))
-    assert isinstance(loaded, QueuedJob)
-    assert loaded.status == JobStatus.queued
+    assert job_store.get_job(JobId("job-1")) == expected
     remaining = job_store._conn.execute(
         "SELECT COUNT(*) AS n FROM job_log_lines WHERE job_id = ?",
         ("job-1",),
@@ -400,7 +492,15 @@ def test_unfinished_count(job_store: JobStore) -> None:
         )
     )
     job_store.save_metadata(
-        RunningJob(
+        ScheduledJob(
+            id=JobId("scheduled"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            scheduled_at=_CREATED_AT_2,
+        )
+    )
+    job_store.save_metadata(
+        ImmediateRunningJob(
             id=JobId("running"),
             url=_URL_B,
             created_at=_CREATED_AT_2,
@@ -409,7 +509,7 @@ def test_unfinished_count(job_store: JobStore) -> None:
         )
     )
     job_store.save_metadata(
-        SucceededJob(
+        ImmediateSucceededJob(
             id=JobId("done"),
             url=_URL_C,
             created_at=_CREATED_AT_3,
@@ -421,4 +521,4 @@ def test_unfinished_count(job_store: JobStore) -> None:
     )
 
     # Act / Assert
-    assert job_store.unfinished_count() == 2
+    assert job_store.unfinished_count() == 3

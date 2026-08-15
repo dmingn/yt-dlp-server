@@ -18,6 +18,7 @@ from yt_dlp_server.models import (
     JobSummary,
     QueuedJob,
     RunningJob,
+    ScheduledJob,
     SucceededJob,
 )
 
@@ -124,9 +125,14 @@ class JobService:
             return None
 
         if isinstance(job, QueuedJob):
-            cancelled = job.cancel(finished_at=_utcnow())
-            self._store.save_metadata(cancelled)
-            return cancelled
+            immediate_cancelled = job.cancel(finished_at=_utcnow())
+            self._store.save_metadata(immediate_cancelled)
+            return immediate_cancelled
+
+        if isinstance(job, ScheduledJob):
+            scheduled_cancelled = job.cancel(finished_at=_utcnow())
+            self._store.save_metadata(scheduled_cancelled)
+            return scheduled_cancelled
 
         if isinstance(job, RunningJob):
             cancelled = job.cancel(finished_at=_utcnow())
@@ -136,8 +142,8 @@ class JobService:
 
         assert_never(job)
 
-    def requeue_unfinished_jobs(self) -> None:
-        self._store.requeue_running()
+    def restore_waiting_jobs(self) -> None:
+        self._store.restore_waiting_jobs()
 
     async def start_polling(self) -> None:
         if self._poll_task is not None:
