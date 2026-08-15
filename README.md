@@ -8,7 +8,7 @@ Paste a URL in the browser; the server downloads it with fixed yt-dlp settings.
 
 - Intended for trusted LAN use only. **There is no authentication.**
 - Anyone who can reach the service can submit arbitrary URLs for download.
-- Job status and logs are stored in SQLite (`DATABASE_PATH`, default `jobs.sqlite3`) and survive restarts. On startup, `running` jobs are restored to `queued` (or `scheduled` if they were started from a schedule), then a loop starts queued jobs up to `MAX_RUNNING` about once a second. User-cancelled jobs stay `cancelled`. Downloaded files on disk remain.
+- Job status and logs are stored in SQLite (`DATABASE_PATH`, default `jobs.sqlite3`) and survive restarts. On startup, `running` jobs are restored to `queued` (or `scheduled` if they were started from a schedule) and their in-progress logs are cleared, then a loop starts queued jobs up to `MAX_RUNNING` about once a second. User-cancelled jobs stay `cancelled`. Downloaded files on disk remain.
 
 ## Quick start (Docker)
 
