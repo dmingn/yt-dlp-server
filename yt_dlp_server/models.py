@@ -38,7 +38,7 @@ class _JobBase(BaseModel):
 
     id: JobId
     url: AnyHttpUrl
-    created_at: datetime
+    created_at: AwareDatetime
 
 
 class QueuedJob(_JobBase):
@@ -90,7 +90,7 @@ class ScheduledJob(_JobBase):
 
 class _RunningJobBase(_JobBase):
     status: Literal[JobStatus.running] = JobStatus.running
-    started_at: datetime
+    started_at: AwareDatetime
     log: JobLog
 
 
@@ -202,8 +202,8 @@ class ScheduledRunningJob(_RunningJobBase):
 
 class _SucceededJobBase(_JobBase):
     status: Literal[JobStatus.succeeded] = JobStatus.succeeded
-    started_at: datetime
-    finished_at: datetime
+    started_at: AwareDatetime
+    finished_at: AwareDatetime
     exit_code: int
     log: JobLog
 
@@ -218,8 +218,8 @@ class ScheduledSucceededJob(_SucceededJobBase):
 
 class _FailedJobBase(_JobBase):
     status: Literal[JobStatus.failed] = JobStatus.failed
-    started_at: datetime
-    finished_at: datetime
+    started_at: AwareDatetime
+    finished_at: AwareDatetime
     exit_code: int | None = None
     log: JobLog
     error: str
@@ -235,8 +235,8 @@ class ScheduledFailedJob(_FailedJobBase):
 
 class _CancelledJobBase(_JobBase):
     status: Literal[JobStatus.cancelled] = JobStatus.cancelled
-    started_at: datetime | None = None
-    finished_at: datetime
+    started_at: AwareDatetime | None = None
+    finished_at: AwareDatetime
     log: JobLog
 
 
@@ -310,9 +310,9 @@ class JobSummary(BaseModel):
     id: JobId
     url: AnyHttpUrl
     status: JobStatus
-    created_at: datetime
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
+    created_at: AwareDatetime
+    started_at: AwareDatetime | None = None
+    finished_at: AwareDatetime | None = None
     scheduled_at: AwareDatetime | None = None
     exit_code: int | None = None
     log_line_count: int
