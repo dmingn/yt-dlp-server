@@ -402,6 +402,32 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     assert claimed.id == "job-2"
 
 
+def test_claim_oldest_queued_skips_scheduled(job_store: JobStore) -> None:
+    # Arrange
+    job_store.save_metadata(
+        ScheduledJob(
+            id=JobId("scheduled"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            scheduled_at=_CREATED_AT_2,
+        )
+    )
+    job_store.save_metadata(
+        QueuedJob(
+            id=JobId("queued"),
+            url=_URL_B,
+            created_at=_CREATED_AT_2,
+        )
+    )
+
+    # Act
+    claimed = job_store.claim_oldest_queued(started_at=_STARTED_AT)
+
+    # Assert
+    assert isinstance(claimed, RunningJob)
+    assert claimed.id == JobId("queued")
+
+
 @pytest.mark.parametrize(
     ("running", "expected"),
     [
