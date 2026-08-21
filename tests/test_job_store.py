@@ -376,8 +376,25 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
 def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
+        ScheduledJob(
+            id=JobId("scheduled"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            scheduled_at=_CREATED_AT_2,
+        )
+    )
+    job_store.save_metadata(
+        ImmediateRunningJob(
+            id=JobId("running"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            started_at=_STARTED_AT,
+            log=JobLog(),
+        )
+    )
+    job_store.save_metadata(
         ImmediateSucceededJob(
-            id=JobId("job-1"),
+            id=JobId("succeeded"),
             url=_URL_A,
             created_at=_CREATED_AT,
             started_at=_STARTED_AT,
@@ -387,29 +404,24 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
         )
     )
     job_store.save_metadata(
-        QueuedJob(
-            id=JobId("job-2"),
-            url=_URL_B,
-            created_at=_CREATED_AT_2,
-        )
-    )
-
-    # Act
-    claimed = job_store.claim_oldest_queued(started_at=_STARTED_AT)
-
-    # Assert
-    assert isinstance(claimed, RunningJob)
-    assert claimed.id == "job-2"
-
-
-def test_claim_oldest_queued_skips_scheduled(job_store: JobStore) -> None:
-    # Arrange
-    job_store.save_metadata(
-        ScheduledJob(
-            id=JobId("scheduled"),
+        ImmediateFailedJob(
+            id=JobId("failed"),
             url=_URL_A,
             created_at=_CREATED_AT,
-            scheduled_at=_CREATED_AT_2,
+            started_at=_STARTED_AT,
+            finished_at=_FINISHED_AT,
+            exit_code=1,
+            log=JobLog(),
+            error="boom",
+        )
+    )
+    job_store.save_metadata(
+        ImmediateCancelledJob(
+            id=JobId("cancelled"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            finished_at=_FINISHED_AT,
+            log=JobLog(),
         )
     )
     job_store.save_metadata(
