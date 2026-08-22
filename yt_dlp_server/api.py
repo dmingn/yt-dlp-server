@@ -2,7 +2,14 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import AnyHttpUrl, AwareDatetime, BaseModel
 
 from yt_dlp_server.job_service import JobCapacityFull, JobService
-from yt_dlp_server.models import CancelledJob, Job, JobId, JobSummary
+from yt_dlp_server.models import (
+    CancelledJob,
+    Job,
+    JobId,
+    JobSummary,
+    QueuedJob,
+    ScheduledJob,
+)
 
 
 class CreateJobRequest(BaseModel):
@@ -27,23 +34,19 @@ def _job_service_from_request(request: Request) -> JobService:
     return job_service
 
 
-@router.post("/createJob", response_model=Job, status_code=201)
-async def create_job(body: CreateJobRequest, request: Request) -> Job:
+@router.post("/createJob", response_model=QueuedJob | ScheduledJob, status_code=201)
+async def create_job(
+    body: CreateJobRequest, request: Request
+) -> QueuedJob | ScheduledJob:
     job_service = _job_service_from_request(request)
 
     try:
-        job_id = await job_service.submit(
+        return job_service.create_job(
             str(body.url),
             scheduled_at=body.scheduled_at,
         )
     except JobCapacityFull:
         raise HTTPException(status_code=503, detail="Job capacity full") from None
-
-    job = job_service.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=500, detail="Created job not found")
-
-    return job
 
 
 @router.post("/listJobs", response_model=list[JobSummary])
