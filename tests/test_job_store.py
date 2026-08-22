@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import AnyHttpUrl
+
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
     ImmediateCancelledJob,
