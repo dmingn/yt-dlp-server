@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -27,11 +27,13 @@ _URL_A = AnyHttpUrl("https://example.com/a")
 _URL_B = AnyHttpUrl("https://example.com/b")
 _URL_C = AnyHttpUrl("https://example.com/c")
 _CREATED_AT = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
-_CREATED_AT_2 = datetime.fromisoformat("2026-01-02T00:00:00+00:00")
-_CREATED_AT_3 = datetime.fromisoformat("2026-01-03T00:00:00+00:00")
-_STARTED_AT = datetime.fromisoformat("2026-01-01T01:00:00+00:00")
-_STARTED_AT_2 = datetime.fromisoformat("2026-01-02T01:00:00+00:00")
-_FINISHED_AT = datetime.fromisoformat("2026-01-01T02:00:00+00:00")
+_CREATED_AT_2 = _CREATED_AT + timedelta(days=1)
+_CREATED_AT_3 = _CREATED_AT_2 + timedelta(days=1)
+_STARTED_AT = _CREATED_AT + timedelta(hours=1)
+_STARTED_AT_2 = _STARTED_AT + timedelta(days=1)
+_FINISHED_AT = _STARTED_AT + timedelta(hours=1)
+_SCHEDULED_AT = datetime.fromisoformat("2026-02-01T00:00:00+00:00")
+_SCHEDULED_AT_2 = _SCHEDULED_AT + timedelta(days=1)
 
 
 @pytest.fixture
@@ -60,7 +62,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
             ),
             id="scheduled",
         ),
@@ -70,7 +72,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
                 log=JobLog(),
             ),
             id="running-scheduled",
@@ -83,7 +85,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
                 exit_code=0,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
                 log=JobLog(lines=("done\n",)),
             ),
             id="succeeded-scheduled",
@@ -96,7 +98,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
                 started_at=_STARTED_AT,
                 finished_at=_FINISHED_AT,
                 exit_code=1,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
                 log=JobLog(lines=("err\n",)),
                 error="boom",
             ),
@@ -108,7 +110,7 @@ def job_store(tmp_path: Path) -> Iterator[JobStore]:
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 finished_at=_FINISHED_AT,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
                 log=JobLog(),
             ),
             id="cancelled-scheduled",
@@ -380,7 +382,7 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
             id=JobId("scheduled"),
             url=_URL_A,
             created_at=_CREATED_AT,
-            scheduled_at=_CREATED_AT_2,
+            scheduled_at=_SCHEDULED_AT,
         )
     )
     job_store.save_metadata(
@@ -440,6 +442,91 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     assert claimed.id == JobId("queued")
 
 
+def test_claim_due_scheduled_returns_none_when_empty(job_store: JobStore) -> None:
+    # Arrange
+    now = datetime.fromisoformat("2026-03-01T00:00:00+00:00")  # any aware datetime
+
+    # Act / Assert
+    assert job_store.claim_due_scheduled(now=now) is None
+
+
+def test_claim_due_scheduled_skips_when_not_due(job_store: JobStore) -> None:
+    # Arrange
+    now = _SCHEDULED_AT
+    job_store.save_metadata(
+        ScheduledJob(
+            id=JobId("not-due"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            scheduled_at=now + timedelta(days=1),
+        )
+    )
+
+    # Act / Assert
+    assert job_store.claim_due_scheduled(now=now) is None
+
+
+def test_claim_due_scheduled_claims_in_scheduled_order(job_store: JobStore) -> None:
+    # Arrange
+    now = _SCHEDULED_AT_2
+    job_store.save_metadata(
+        ScheduledJob(
+            id=JobId("later"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+            scheduled_at=_SCHEDULED_AT_2,
+        )
+    )
+    job_store.save_metadata(
+        ScheduledJob(
+            id=JobId("earlier"),
+            url=_URL_B,
+            created_at=_CREATED_AT_2,
+            scheduled_at=_SCHEDULED_AT,
+        )
+    )
+
+    # Act
+    first = job_store.claim_due_scheduled(now=now)
+    second = job_store.claim_due_scheduled(now=now)
+
+    # Assert
+    assert isinstance(first, ScheduledRunningJob)
+    assert first.id == JobId("earlier")
+    assert first.started_at == now
+    assert isinstance(second, ScheduledRunningJob)
+    assert second.id == JobId("later")
+    assert job_store.claim_due_scheduled(now=now) is None
+
+
+def test_claim_due_scheduled_skips_non_scheduled(job_store: JobStore) -> None:
+    # Arrange
+    scheduled_at = _SCHEDULED_AT
+    now = scheduled_at
+    job_store.save_metadata(
+        QueuedJob(
+            id=JobId("queued"),
+            url=_URL_A,
+            created_at=_CREATED_AT,
+        )
+    )
+    job_store.save_metadata(
+        ScheduledJob(
+            id=JobId("due"),
+            url=_URL_B,
+            created_at=_CREATED_AT,
+            scheduled_at=scheduled_at,
+        )
+    )
+
+    # Act
+    claimed = job_store.claim_due_scheduled(now=now)
+
+    # Assert
+    assert isinstance(claimed, ScheduledRunningJob)
+    assert claimed.id == JobId("due")
+
+
 @pytest.mark.parametrize(
     ("running", "expected"),
     [
@@ -463,14 +550,14 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
                 url=_URL_A,
                 created_at=_CREATED_AT,
                 started_at=_STARTED_AT,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
                 log=JobLog(),
             ),
             ScheduledJob(
                 id=JobId("job-1"),
                 url=_URL_A,
                 created_at=_CREATED_AT,
-                scheduled_at=_CREATED_AT_2,
+                scheduled_at=_SCHEDULED_AT,
             ),
         ),
     ],
@@ -534,7 +621,7 @@ def test_unfinished_count(job_store: JobStore) -> None:
             id=JobId("scheduled"),
             url=_URL_A,
             created_at=_CREATED_AT,
-            scheduled_at=_CREATED_AT_2,
+            scheduled_at=_SCHEDULED_AT,
         )
     )
     job_store.save_metadata(

@@ -80,7 +80,39 @@ def test_create_job_returns_201(client: TestClient) -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["url"] == "https://example.com/video"
+    assert body["status"] == "queued"
     assert "id" in body
+
+
+def test_create_job_with_scheduled_at_returns_scheduled(client: TestClient) -> None:
+    # Act
+    response = client.post(
+        "/api/createJob",
+        json={
+            "url": "https://example.com/video",
+            "scheduled_at": "2099-01-01T00:00:00Z",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "scheduled"
+    assert body["scheduled_at"] == "2099-01-01T00:00:00Z"
+
+
+def test_create_job_rejects_naive_scheduled_at(client: TestClient) -> None:
+    # Act
+    response = client.post(
+        "/api/createJob",
+        json={
+            "url": "https://example.com/video",
+            "scheduled_at": "2099-01-01T00:00:00",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 422
 
 
 def test_created_job_appears_in_list(client: TestClient) -> None:
@@ -157,6 +189,25 @@ def test_cancel_job_marks_queued_as_cancelled(
         body = response.json()
         assert body["id"] == job_id
         assert body["status"] == "cancelled"
+
+
+def test_cancel_job_marks_scheduled_as_cancelled(client: TestClient) -> None:
+    # Arrange
+    created = client.post(
+        "/api/createJob",
+        json={
+            "url": "https://example.com/video",
+            "scheduled_at": "2099-01-01T00:00:00Z",
+        },
+    )
+    job_id = created.json()["id"]
+
+    # Act
+    response = client.post("/api/cancelJob", json={"id": job_id})
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
 
 
 def test_cancel_job_cancels_running(
