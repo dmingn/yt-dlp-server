@@ -16,6 +16,7 @@ from yt_dlp_server.models import (
     JobLog,
     JobStatus,
     RunningJob,
+    ScheduledRunningJob,
     SucceededJob,
 )
 from yt_dlp_server.process_job import process_job
@@ -23,6 +24,7 @@ from yt_dlp_server.process_job import process_job
 _URL = AnyHttpUrl("https://example.com/video")
 _CREATED = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
 _STARTED = datetime.fromisoformat("2026-01-01T01:00:00+00:00")
+_SCHEDULED = datetime.fromisoformat("2026-02-01T00:00:00+00:00")
 
 
 async def _noop_process_job(_job_service: JobService, _job_id: JobId) -> None:
@@ -247,3 +249,60 @@ async def test_process_job_on_task_cancel_kills_proc_and_keeps_running(
     assert isinstance(current, RunningJob)
     assert current.status == JobStatus.running
     assert proc.killed
+
+
+@pytest.mark.asyncio
+async def test_process_job_enables_wait_and_retry_for_scheduled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    captured: dict[str, object] = {}
+
+    def fake_build_yt_dlp_cmd(**kwargs: object) -> tuple[str, ...]:
+        captured.update(kwargs)
+        return ("true",)
+
+    async def fake_create_subprocess_exec(
+        *cmd: str,
+        stdout: Any = None,
+        stderr: Any = None,
+    ) -> _FakeProc:
+        return _FakeProc(stdout_lines=[], stderr_lines=[], exit_code=0)
+
+    monkeypatch.setattr(
+        "yt_dlp_server.process_job.build_yt_dlp_cmd",
+        fake_build_yt_dlp_cmd,
+    )
+    monkeypatch.setattr(
+        "yt_dlp_server.process_job.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    job_id = JobId("scheduled-running")
+    with JobStore(
+        max_jobs=100,
+        database_path=tmp_path / "jobs.sqlite3",
+        max_log_lines=2000,
+    ) as store:
+        store.save_metadata(
+            ScheduledRunningJob(
+                id=job_id,
+                url=_URL,
+                created_at=_CREATED,
+                started_at=_STARTED,
+                scheduled_at=_SCHEDULED,
+                log=JobLog(),
+            )
+        )
+        job_service = JobService(
+            store,
+            max_running=0,
+            process_job_fn=_noop_process_job,
+        )
+
+        # Act
+        await process_job(job_service, job_id, output_dir="/out")
+
+    # Assert
+    assert captured["wait_and_retry"] is True
