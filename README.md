@@ -47,6 +47,14 @@ make playwright-install  # once, for UI tests
 make check
 ```
 
+## Release
+
+The package version comes from Git tags (hatch-vcs).
+
+Confirm CI on `main` is green, then GitHub → Releases → Draft a new release.
+Create a new tag (`vX.Y.Z`) targeting `main`, Generate release notes, and Publish.
+That tag runs CI/CD and pushes the Docker image to GHCR with the same tag.
+
 ## License
 
 This project is MIT-licensed.
