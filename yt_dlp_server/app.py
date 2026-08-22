@@ -33,6 +33,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     job_service,
                     job_id,
                     output_dir=settings.output_dir,
+                    pot_base_url=(
+                        None
+                        if settings.pot_base_url is None
+                        else str(settings.pot_base_url)
+                    ),
                 ),
             )
             job_service.restore_waiting_jobs()
