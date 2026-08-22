@@ -54,6 +54,33 @@ def test_build_yt_dlp_cmd_with_pot_base_url() -> None:
     )
 
 
+def test_build_yt_dlp_cmd_wait_and_retry() -> None:
+    # Arrange
+    url = "https://example.com/video"
+    output_dir = "/data"
+
+    # Act
+    cmd = build_yt_dlp_cmd(url=url, output_dir=output_dir, wait_and_retry=True)
+
+    # Assert
+    assert cmd == (
+        sys.executable,
+        "-u",
+        "-m",
+        "yt_dlp",
+        "-o",
+        build_output_template(output_dir),
+        "--no-progress",
+        "--wait-for-video",
+        "15-60",
+        "--retries",
+        "infinite",
+        "--fragment-retries",
+        "infinite",
+        url,
+    )
+
+
 def test_build_output_template_strips_trailing_slash() -> None:
     # Act
     with_slash = build_output_template("/out/")

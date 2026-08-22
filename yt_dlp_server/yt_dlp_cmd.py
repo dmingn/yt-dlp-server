@@ -17,6 +17,7 @@ def build_yt_dlp_cmd(
     url: str,
     output_dir: str,
     pot_base_url: str | None = None,
+    wait_and_retry: bool = False,
 ) -> tuple[str, ...]:
     cmd: list[str] = [
         sys.executable,
@@ -27,6 +28,18 @@ def build_yt_dlp_cmd(
         build_output_template(output_dir),
         "--no-progress",
     ]
+
+    if wait_and_retry:
+        cmd.extend(
+            (
+                "--wait-for-video",
+                "15-60",
+                "--retries",
+                "infinite",
+                "--fragment-retries",
+                "infinite",
+            )
+        )
 
     # When POT_BASE_URL is set, use mweb + GVS PO Token via bgutil HTTP.
     # Official recommendation: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide

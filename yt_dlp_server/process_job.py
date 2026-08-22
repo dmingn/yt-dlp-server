@@ -1,7 +1,7 @@
 import asyncio
 
 from yt_dlp_server.job_service import JobService
-from yt_dlp_server.models import JobId, RunningJob
+from yt_dlp_server.models import JobId, RunningJob, ScheduledRunningJob
 from yt_dlp_server.yt_dlp_cmd import build_yt_dlp_cmd
 
 
@@ -32,6 +32,7 @@ async def process_job(
             url=str(job.url),
             output_dir=output_dir,
             pot_base_url=pot_base_url,
+            wait_and_retry=isinstance(job, ScheduledRunningJob),
         )
         proc = await asyncio.create_subprocess_exec(
             *cmd,
