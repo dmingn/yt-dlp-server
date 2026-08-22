@@ -25,6 +25,11 @@ class CancelJobRequest(BaseModel):
     id: JobId
 
 
+class RescheduleJobRequest(BaseModel):
+    id: JobId
+    scheduled_at: AwareDatetime
+
+
 router = APIRouter(prefix="/api")
 
 
@@ -74,3 +79,17 @@ async def cancel_job(body: CancelJobRequest, request: Request) -> CancelledJob:
         raise HTTPException(status_code=409, detail="Job already finished")
 
     return cancelled
+
+
+@router.post("/rescheduleJob", response_model=ScheduledJob)
+async def reschedule_job(body: RescheduleJobRequest, request: Request) -> ScheduledJob:
+    job_service = _job_service_from_request(request)
+
+    if job_service.get(body.id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    rescheduled = job_service.reschedule(body.id, scheduled_at=body.scheduled_at)
+    if rescheduled is None:
+        raise HTTPException(status_code=409, detail="Job status is not scheduled")
+
+    return rescheduled

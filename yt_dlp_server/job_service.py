@@ -161,6 +161,17 @@ class JobService:
 
         assert_never(job)
 
+    def reschedule(
+        self, job_id: JobId, *, scheduled_at: datetime
+    ) -> ScheduledJob | None:
+        job = self._store.get_job(job_id)
+        if not isinstance(job, ScheduledJob):
+            return None
+
+        rescheduled = job.reschedule(scheduled_at=scheduled_at)
+        self._store.save_metadata(rescheduled)
+        return rescheduled
+
     def restore_waiting_jobs(self) -> None:
         self._store.restore_waiting_jobs()
 

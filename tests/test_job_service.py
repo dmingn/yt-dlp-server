@@ -111,6 +111,38 @@ def test_create_job_rejects_when_unfinished_at_capacity(
         job_service.create_job("https://example.com/2")
 
 
+def test_reschedule_updates_scheduled_at(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    job_service = make_job_service()
+    job = job_service.create_job(
+        "https://example.com/video",
+        scheduled_at=_SCHEDULED,
+    )
+    later = _SCHEDULED + timedelta(days=1)
+
+    # Act
+    rescheduled = job_service.reschedule(job.id, scheduled_at=later)
+
+    # Assert
+    assert isinstance(rescheduled, ScheduledJob)
+    assert rescheduled.scheduled_at == later
+    assert job_service.get(job.id) == rescheduled
+
+
+def test_reschedule_returns_none_when_not_scheduled(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    job_service = make_job_service()
+    job = job_service.create_job("https://example.com/video")
+
+    # Act / Assert
+    assert job_service.reschedule(job.id, scheduled_at=_SCHEDULED) is None
+    assert isinstance(job_service.get(job.id), QueuedJob)
+
+
 @pytest.mark.asyncio
 async def test_try_start_jobs_starts_queued_up_to_max_running(
     make_job_service: Callable[..., JobService],

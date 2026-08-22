@@ -210,6 +210,94 @@ def test_cancel_job_marks_scheduled_as_cancelled(client: TestClient) -> None:
     assert response.json()["status"] == "cancelled"
 
 
+def test_reschedule_job_updates_scheduled_at(client: TestClient) -> None:
+    # Arrange
+    created = client.post(
+        "/api/createJob",
+        json={
+            "url": "https://example.com/video",
+            "scheduled_at": "2099-01-01T00:00:00Z",
+        },
+    )
+    job_id = created.json()["id"]
+
+    # Act
+    response = client.post(
+        "/api/rescheduleJob",
+        json={
+            "id": job_id,
+            "scheduled_at": "2099-02-01T00:00:00Z",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == job_id
+    assert body["status"] == "scheduled"
+    assert body["scheduled_at"] == "2099-02-01T00:00:00Z"
+
+
+def test_reschedule_job_rejects_naive_scheduled_at(client: TestClient) -> None:
+    # Arrange
+    created = client.post(
+        "/api/createJob",
+        json={
+            "url": "https://example.com/video",
+            "scheduled_at": "2099-01-01T00:00:00Z",
+        },
+    )
+    job_id = created.json()["id"]
+
+    # Act
+    response = client.post(
+        "/api/rescheduleJob",
+        json={
+            "id": job_id,
+            "scheduled_at": "2099-02-01T00:00:00",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 422
+
+
+def test_reschedule_job_returns_404_for_unknown_id(client: TestClient) -> None:
+    # Act
+    response = client.post(
+        "/api/rescheduleJob",
+        json={
+            "id": "does-not-exist",
+            "scheduled_at": "2099-02-01T00:00:00Z",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 404
+
+
+def test_reschedule_job_returns_409_when_not_scheduled(client: TestClient) -> None:
+    # Arrange
+    created = client.post(
+        "/api/createJob",
+        json={"url": "https://example.com/video"},
+    )
+    job_id = created.json()["id"]
+
+    # Act
+    response = client.post(
+        "/api/rescheduleJob",
+        json={
+            "id": job_id,
+            "scheduled_at": "2099-02-01T00:00:00Z",
+        },
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Job status is not scheduled"
+
+
 def test_cancel_job_cancels_running(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
