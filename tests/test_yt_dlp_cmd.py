@@ -3,7 +3,7 @@ import sys
 from yt_dlp_server.yt_dlp_cmd import build_output_template, build_yt_dlp_cmd
 
 
-def test_build_yt_dlp_cmd_shape() -> None:
+def test_build_yt_dlp_cmd_without_pot() -> None:
     # Arrange
     url = "https://example.com/video"
     output_dir = "/data"
@@ -12,11 +12,46 @@ def test_build_yt_dlp_cmd_shape() -> None:
     cmd = build_yt_dlp_cmd(url=url, output_dir=output_dir)
 
     # Assert
-    assert cmd[:4] == (sys.executable, "-u", "-m", "yt_dlp")
-    assert "-o" in cmd
-    assert cmd[cmd.index("-o") + 1] == build_output_template(output_dir)
-    assert "--no-progress" in cmd
-    assert cmd[-1] == url
+    assert cmd == (
+        sys.executable,
+        "-u",
+        "-m",
+        "yt_dlp",
+        "-o",
+        build_output_template(output_dir),
+        "--no-progress",
+        url,
+    )
+
+
+def test_build_yt_dlp_cmd_with_pot_base_url() -> None:
+    # Arrange
+    url = "https://example.com/video"
+    output_dir = "/data"
+    pot_base_url = "http://pot-provider:4416"
+
+    # Act
+    cmd = build_yt_dlp_cmd(
+        url=url,
+        output_dir=output_dir,
+        pot_base_url=pot_base_url,
+    )
+
+    # Assert
+    assert cmd == (
+        sys.executable,
+        "-u",
+        "-m",
+        "yt_dlp",
+        "-o",
+        build_output_template(output_dir),
+        "--no-progress",
+        "--extractor-args",
+        "youtube:player_client=mweb",
+        "--extractor-args",
+        f"youtubepot-bgutilhttp:base_url={pot_base_url}",
+        url,
+    )
 
 
 def test_build_output_template_strips_trailing_slash() -> None:

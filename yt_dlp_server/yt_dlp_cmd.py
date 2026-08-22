@@ -12,8 +12,13 @@ def build_output_template(output_dir: str) -> str:
     return f"{output_dir.rstrip('/')}/{OUTPUT_NAME_TEMPLATE}"
 
 
-def build_yt_dlp_cmd(*, url: str, output_dir: str) -> tuple[str, ...]:
-    return (
+def build_yt_dlp_cmd(
+    *,
+    url: str,
+    output_dir: str,
+    pot_base_url: str | None = None,
+) -> tuple[str, ...]:
+    cmd: list[str] = [
         sys.executable,
         "-u",
         "-m",
@@ -21,5 +26,20 @@ def build_yt_dlp_cmd(*, url: str, output_dir: str) -> tuple[str, ...]:
         "-o",
         build_output_template(output_dir),
         "--no-progress",
-        url,
-    )
+    ]
+
+    # When POT_BASE_URL is set, use mweb + GVS PO Token via bgutil HTTP.
+    # Official recommendation: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
+    # Unset leaves yt-dlp defaults (no these extractor-args).
+    if pot_base_url:
+        cmd.extend(
+            (
+                "--extractor-args",
+                "youtube:player_client=mweb",
+                "--extractor-args",
+                f"youtubepot-bgutilhttp:base_url={pot_base_url}",
+            )
+        )
+
+    cmd.append(url)
+    return tuple(cmd)

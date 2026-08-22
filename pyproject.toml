@@ -4,6 +4,7 @@ dynamic = ["version"]
 description = "Minimal web UI to download videos with yt-dlp"
 requires-python = ">=3.14"
 dependencies = [
+    "bgutil-ytdlp-pot-provider>=1.3.2",
     "fastapi>=0.115.0",
     "pydantic>=2.13.3",
     "pydantic-settings>=2.7.0",

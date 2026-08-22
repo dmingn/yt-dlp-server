@@ -20,6 +20,7 @@ async def process_job(
     job_id: JobId,
     *,
     output_dir: str,
+    pot_base_url: str | None = None,
 ) -> None:
     job = job_service.get(job_id)
     if not isinstance(job, RunningJob):
@@ -27,7 +28,11 @@ async def process_job(
 
     proc: asyncio.subprocess.Process | None = None
     try:
-        cmd = build_yt_dlp_cmd(url=str(job.url), output_dir=output_dir)
+        cmd = build_yt_dlp_cmd(
+            url=str(job.url),
+            output_dir=output_dir,
+            pot_base_url=pot_base_url,
+        )
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
