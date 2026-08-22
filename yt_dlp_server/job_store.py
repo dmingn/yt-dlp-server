@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Self
 
+from pydantic import AwareDatetime, TypeAdapter
+
 from yt_dlp_server.db import connect
 from yt_dlp_server.models import (
     FINISHED_STATUSES,
@@ -17,7 +19,11 @@ from yt_dlp_server.models import (
     JobStatus,
     QueuedJob,
     RunningJob,
+    ScheduledJob,
+    ScheduledRunningJob,
 )
+
+_AWARE_DATETIME = TypeAdapter(AwareDatetime)
 
 
 class JobStore:
@@ -118,6 +124,33 @@ class JobStore:
             assert isinstance(job, QueuedJob)
 
             running = job.start(started_at=started_at)
+            self._upsert_metadata(running)
+            return running
+
+    def claim_due_scheduled(self, *, now: datetime) -> ScheduledRunningJob | None:
+        """Take ownership of the earliest due scheduled job by marking it running."""
+        with self._conn:
+            row = self._conn.execute(
+                """
+                SELECT * FROM jobs
+                WHERE status = ?
+                  AND scheduled_at <= ?
+                ORDER BY scheduled_at ASC
+                LIMIT 1
+                """,
+                (
+                    JobStatus.scheduled.value,
+                    # Same pydantic JSON dump as _upsert_metadata uses for scheduled_at.
+                    _AWARE_DATETIME.dump_python(now, mode="json"),
+                ),
+            ).fetchone()
+            if row is None:
+                return None
+
+            job = self._job_from_row(row)
+            assert isinstance(job, ScheduledJob)
+
+            running = job.start(started_at=now)
             self._upsert_metadata(running)
             return running
 

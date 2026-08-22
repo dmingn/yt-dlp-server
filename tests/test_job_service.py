@@ -1,12 +1,12 @@
 import asyncio
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 from pydantic import AnyHttpUrl
 
-from yt_dlp_server.job_service import JobCapacityFull, JobService, ProcessJobFn
+from yt_dlp_server.job_service import JobCapacityFull, JobService, ProcessJobFn, _utcnow
 from yt_dlp_server.job_store import JobStore
 from yt_dlp_server.models import (
     CancelledJob,
@@ -23,8 +23,9 @@ from yt_dlp_server.models import (
 
 _URL = AnyHttpUrl("https://example.com/video")
 _CREATED = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
-_STARTED = datetime.fromisoformat("2026-01-01T01:00:00+00:00")
-_FINISHED = datetime.fromisoformat("2026-01-01T02:00:00+00:00")
+_STARTED = _CREATED + timedelta(hours=1)
+_FINISHED = _STARTED + timedelta(hours=1)
+_SCHEDULED = datetime.fromisoformat("2026-02-01T00:00:00+00:00")
 
 
 async def _noop_process_job(_job_service: JobService, _job_id: JobId) -> None:
@@ -40,6 +41,7 @@ def make_job_service(tmp_path: Path) -> Callable[..., JobService]:
         max_running: int = 0,
         process_job_fn: ProcessJobFn | None = None,
         poll_interval_seconds: float = 1,
+        utcnow_fn: Callable[[], datetime] = _utcnow,
     ) -> JobService:
         store = JobStore(
             max_jobs=max_jobs,
@@ -51,36 +53,62 @@ def make_job_service(tmp_path: Path) -> Callable[..., JobService]:
             max_running=max_running,
             process_job_fn=process_job_fn or _noop_process_job,
             poll_interval_seconds=poll_interval_seconds,
+            utcnow_fn=utcnow_fn,
         )
 
     return _make
 
 
-def test_enqueue_persists_queued_job(
+def test_create_job_persists_queued_job(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
     job_service = make_job_service(max_jobs=10)
 
     # Act
-    job = job_service.enqueue("https://example.com/a")
+    job = job_service.create_job("https://example.com/a")
 
     # Assert
     assert job.status == JobStatus.queued
     assert job_service.get(job.id) == job
 
 
-def test_enqueue_rejects_when_unfinished_at_capacity(
+def test_create_job_with_scheduled_at_persists_scheduled_job(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
-    job_service = make_job_service(max_jobs=2)
-    job_service.enqueue("https://example.com/1")
-    job_service.enqueue("https://example.com/2")
+    job_service = make_job_service(max_jobs=10)
+
+    # Act
+    job = job_service.create_job(
+        "https://example.com/a",
+        scheduled_at=_SCHEDULED,
+    )
+
+    # Assert
+    assert isinstance(job, ScheduledJob)
+    assert job.scheduled_at == _SCHEDULED
+    assert job_service.get(job.id) == job
+
+
+@pytest.mark.parametrize(
+    "scheduled_at",
+    [
+        pytest.param(None, id="queued"),
+        pytest.param(_SCHEDULED, id="scheduled"),
+    ],
+)
+def test_create_job_rejects_when_unfinished_at_capacity(
+    make_job_service: Callable[..., JobService],
+    scheduled_at: datetime | None,
+) -> None:
+    # Arrange
+    job_service = make_job_service(max_jobs=1)
+    job_service.create_job("https://example.com/1", scheduled_at=scheduled_at)
 
     # Act / Assert
     with pytest.raises(JobCapacityFull):
-        job_service.enqueue("https://example.com/3")
+        job_service.create_job("https://example.com/2")
 
 
 @pytest.mark.asyncio
@@ -125,15 +153,21 @@ async def test_try_start_jobs_after_shutdown_does_not_claim(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
-    job_service = make_job_service(max_running=1)
-    job_id = await job_service.submit("https://example.com/a")
+    now = _SCHEDULED
+    job_service = make_job_service(max_running=1, utcnow_fn=lambda: now)
+    queued_id = await job_service.submit("https://example.com/queued")
+    scheduled_id = await job_service.submit(
+        "https://example.com/scheduled",
+        scheduled_at=now,
+    )
     await job_service.shutdown()
 
     # Act
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(job_id), QueuedJob)
+    assert isinstance(job_service.get(queued_id), QueuedJob)
+    assert isinstance(job_service.get(scheduled_id), ScheduledJob)
 
 
 @pytest.mark.asyncio
@@ -213,12 +247,136 @@ async def test_try_start_jobs_starts_next_after_slot_frees(
 
 
 @pytest.mark.asyncio
-async def test_cancel_queued_job_marks_cancelled(
+async def test_try_start_jobs_starts_due_scheduled_ignoring_max_running(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
+    async def hang(_job_service: JobService, _job_id: JobId) -> None:
+        await asyncio.Future()
+
+    now = _SCHEDULED
+    job_service = make_job_service(
+        max_running=1,
+        process_job_fn=hang,
+        utcnow_fn=lambda: now,
+    )
+    queued_id = await job_service.submit("https://example.com/queued")
+    job_service.try_start_jobs()
+    scheduled_id = await job_service.submit(
+        "https://example.com/scheduled",
+        scheduled_at=now,
+    )
+
+    # Act
+    job_service.try_start_jobs()
+
+    # Assert
+    assert isinstance(job_service.get(queued_id), ImmediateRunningJob)
+    assert isinstance(job_service.get(scheduled_id), ScheduledRunningJob)
+    await job_service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_try_start_jobs_prefers_due_scheduled_over_queued(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    async def hang(_job_service: JobService, _job_id: JobId) -> None:
+        await asyncio.Future()
+
+    now = _SCHEDULED
+    job_service = make_job_service(
+        max_running=1,
+        process_job_fn=hang,
+        utcnow_fn=lambda: now,
+    )
+    queued_id = await job_service.submit("https://example.com/queued")
+    scheduled_id = await job_service.submit(
+        "https://example.com/scheduled",
+        scheduled_at=now,
+    )
+
+    # Act
+    job_service.try_start_jobs()
+
+    # Assert
+    assert isinstance(job_service.get(scheduled_id), ScheduledRunningJob)
+    assert isinstance(job_service.get(queued_id), QueuedJob)
+    await job_service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_try_start_jobs_skips_scheduled_when_not_due(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    now = _SCHEDULED
+    job_service = make_job_service(max_running=1, utcnow_fn=lambda: now)
+    job_id = await job_service.submit(
+        "https://example.com/scheduled",
+        scheduled_at=now + timedelta(days=1),
+    )
+
+    # Act
+    job_service.try_start_jobs()
+
+    # Assert
+    assert isinstance(job_service.get(job_id), ScheduledJob)
+
+
+@pytest.mark.asyncio
+async def test_try_start_jobs_starts_restored_past_scheduled(
+    make_job_service: Callable[..., JobService],
+) -> None:
+    # Arrange
+    async def hang(_job_service: JobService, _job_id: JobId) -> None:
+        await asyncio.Future()
+
+    now = _SCHEDULED
+    job_service = make_job_service(
+        max_running=0,
+        process_job_fn=hang,
+        utcnow_fn=lambda: now,
+    )
+    store = job_service._store
+    store.save_metadata(
+        ScheduledRunningJob(
+            id=JobId("restored"),
+            url=_URL,
+            created_at=_CREATED,
+            started_at=_STARTED,
+            scheduled_at=now,
+            log=JobLog(),
+        )
+    )
+    job_service.restore_waiting_jobs()
+
+    # Act
+    job_service.try_start_jobs()
+
+    # Assert
+    assert isinstance(job_service.get(JobId("restored")), ScheduledRunningJob)
+    await job_service.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scheduled_at",
+    [
+        pytest.param(None, id="queued"),
+        pytest.param(_SCHEDULED, id="scheduled"),
+    ],
+)
+async def test_cancel_unstarted_job_marks_cancelled(
+    make_job_service: Callable[..., JobService],
+    scheduled_at: datetime | None,
+) -> None:
+    # Arrange
     job_service = make_job_service()
-    job = job_service.enqueue("https://example.com/video")
+    job = job_service.create_job(
+        "https://example.com/video",
+        scheduled_at=scheduled_at,
+    )
 
     # Act
     cancelled = await job_service.cancel(job.id)
@@ -322,14 +480,14 @@ async def test_cancel_finished_job_returns_none(tmp_path: Path) -> None:
                 url=_URL,
                 created_at=_CREATED,
                 started_at=_STARTED,
-                scheduled_at=datetime.fromisoformat("2026-01-01T03:00:00+00:00"),
+                scheduled_at=_SCHEDULED,
                 log=JobLog(),
             ),
             ScheduledJob(
                 id=JobId("running"),
                 url=_URL,
                 created_at=_CREATED,
-                scheduled_at=datetime.fromisoformat("2026-01-01T03:00:00+00:00"),
+                scheduled_at=_SCHEDULED,
             ),
         ),
     ],

@@ -43,40 +43,62 @@ class JobService:
         max_running: int,
         process_job_fn: ProcessJobFn,
         poll_interval_seconds: float = 1,
+        utcnow_fn: Callable[[], datetime] = _utcnow,
     ) -> None:
         self._store = store
         self._max_running = max_running
         self._poll_interval_seconds = poll_interval_seconds
+        self._utcnow_fn = utcnow_fn
         self._task_manager = JobTaskManager(
             process_job_fn=lambda job_id: process_job_fn(self, job_id),
         )
         self._poll_task: asyncio.Task[None] | None = None
 
-    def enqueue(self, url: str) -> QueuedJob:
+    def create_job(
+        self, url: str, *, scheduled_at: datetime | None = None
+    ) -> QueuedJob | ScheduledJob:
         if self._store.unfinished_count() >= self._store.max_jobs:
             raise JobCapacityFull()
-        job = QueuedJob.model_validate(
-            {
-                "id": JobId(str(uuid.uuid4())),
-                "url": url,
-                "created_at": _utcnow(),
-            }
-        )
+        if scheduled_at is None:
+            job: QueuedJob | ScheduledJob = QueuedJob.model_validate(
+                {
+                    "id": JobId(str(uuid.uuid4())),
+                    "url": url,
+                    "created_at": self._utcnow_fn(),
+                }
+            )
+        else:
+            job = ScheduledJob.model_validate(
+                {
+                    "id": JobId(str(uuid.uuid4())),
+                    "url": url,
+                    "created_at": self._utcnow_fn(),
+                    "scheduled_at": scheduled_at,
+                }
+            )
         self._store.save_metadata(job)
         return job
 
-    async def submit(self, url: str) -> JobId:
-        return self.enqueue(url).id
+    async def submit(self, url: str, *, scheduled_at: datetime | None = None) -> JobId:
+        return self.create_job(url, scheduled_at=scheduled_at).id
 
     def try_start_jobs(self) -> None:
+        now = self._utcnow_fn()
+
+        while not self._task_manager.closed:
+            due_job = self._store.claim_due_scheduled(now=now)
+            if due_job is None:
+                break
+            self._task_manager.spawn(due_job.id)
+
         while (
             not self._task_manager.closed
             and self._task_manager.running_count < self._max_running
         ):
-            claimed = self._store.claim_oldest_queued(started_at=_utcnow())
-            if claimed is None:
+            queued_job = self._store.claim_oldest_queued(started_at=now)
+            if queued_job is None:
                 return
-            self._task_manager.spawn(claimed.id)
+            self._task_manager.spawn(queued_job.id)
 
     def get(self, job_id: JobId) -> Job | None:
         return self._store.get_job(job_id)
@@ -94,7 +116,7 @@ class JobService:
         job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
-        succeeded = job.succeed(finished_at=_utcnow())
+        succeeded = job.succeed(finished_at=self._utcnow_fn())
         self._store.save_metadata(succeeded)
         return succeeded
 
@@ -109,7 +131,7 @@ class JobService:
         if not isinstance(job, RunningJob):
             return None
         failed = job.fail(
-            finished_at=_utcnow(),
+            finished_at=self._utcnow_fn(),
             error=error,
             exit_code=exit_code,
         )
@@ -125,17 +147,17 @@ class JobService:
             return None
 
         if isinstance(job, QueuedJob):
-            immediate_cancelled = job.cancel(finished_at=_utcnow())
+            immediate_cancelled = job.cancel(finished_at=self._utcnow_fn())
             self._store.save_metadata(immediate_cancelled)
             return immediate_cancelled
 
         if isinstance(job, ScheduledJob):
-            scheduled_cancelled = job.cancel(finished_at=_utcnow())
+            scheduled_cancelled = job.cancel(finished_at=self._utcnow_fn())
             self._store.save_metadata(scheduled_cancelled)
             return scheduled_cancelled
 
         if isinstance(job, RunningJob):
-            cancelled = job.cancel(finished_at=_utcnow())
+            cancelled = job.cancel(finished_at=self._utcnow_fn())
             self._store.save_metadata(cancelled)
             await self._task_manager.cancel(job_id)
             return cancelled

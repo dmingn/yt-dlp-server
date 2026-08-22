@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import AnyHttpUrl, BaseModel
+from pydantic import AnyHttpUrl, AwareDatetime, BaseModel
 
 from yt_dlp_server.job_service import JobCapacityFull, JobService
 from yt_dlp_server.models import CancelledJob, Job, JobId, JobSummary
@@ -7,6 +7,7 @@ from yt_dlp_server.models import CancelledJob, Job, JobId, JobSummary
 
 class CreateJobRequest(BaseModel):
     url: AnyHttpUrl
+    scheduled_at: AwareDatetime | None = None
 
 
 class GetJobRequest(BaseModel):
@@ -31,7 +32,10 @@ async def create_job(body: CreateJobRequest, request: Request) -> Job:
     job_service = _job_service_from_request(request)
 
     try:
-        job_id = await job_service.submit(str(body.url))
+        job_id = await job_service.submit(
+            str(body.url),
+            scheduled_at=body.scheduled_at,
+        )
     except JobCapacityFull:
         raise HTTPException(status_code=503, detail="Job capacity full") from None
 
