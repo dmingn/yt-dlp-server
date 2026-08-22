@@ -79,9 +79,6 @@ class JobService:
         self._store.save_metadata(job)
         return job
 
-    async def submit(self, url: str, *, scheduled_at: datetime | None = None) -> JobId:
-        return self.create_job(url, scheduled_at=scheduled_at).id
-
     def try_start_jobs(self) -> None:
         now = self._utcnow_fn()
 

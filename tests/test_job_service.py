@@ -112,22 +112,6 @@ def test_create_job_rejects_when_unfinished_at_capacity(
 
 
 @pytest.mark.asyncio
-async def test_submit_leaves_job_queued(
-    make_job_service: Callable[..., JobService],
-) -> None:
-    # Arrange
-    job_service = make_job_service(max_running=1)
-
-    # Act
-    job_id = await job_service.submit("https://example.com/a")
-
-    # Assert
-    job = job_service.get(job_id)
-    assert isinstance(job, QueuedJob)
-    assert job.id == job_id
-
-
-@pytest.mark.asyncio
 async def test_try_start_jobs_starts_queued_up_to_max_running(
     make_job_service: Callable[..., JobService],
 ) -> None:
@@ -136,8 +120,8 @@ async def test_try_start_jobs_starts_queued_up_to_max_running(
         await asyncio.Future()
 
     job_service = make_job_service(max_running=1, process_job_fn=hang)
-    first_id = await job_service.submit("https://example.com/a")
-    second_id = await job_service.submit("https://example.com/b")
+    first_id = job_service.create_job("https://example.com/a").id
+    second_id = job_service.create_job("https://example.com/b").id
 
     # Act
     job_service.try_start_jobs()
@@ -155,11 +139,11 @@ async def test_try_start_jobs_after_shutdown_does_not_claim(
     # Arrange
     now = _SCHEDULED
     job_service = make_job_service(max_running=1, utcnow_fn=lambda: now)
-    queued_id = await job_service.submit("https://example.com/queued")
-    scheduled_id = await job_service.submit(
+    queued_id = job_service.create_job("https://example.com/queued").id
+    scheduled_id = job_service.create_job(
         "https://example.com/scheduled",
         scheduled_at=now,
-    )
+    ).id
     await job_service.shutdown()
 
     # Act
@@ -197,7 +181,7 @@ async def test_poll_loop_continues_after_try_start_jobs_raises(
         original()
 
     job_service.try_start_jobs = flaky_try_start_jobs  # type: ignore[method-assign]
-    await job_service.submit("https://example.com/a")
+    job_service.create_job("https://example.com/a")
 
     # Act
     await job_service.start_polling()
@@ -228,8 +212,8 @@ async def test_try_start_jobs_starts_next_after_slot_frees(
         await asyncio.Future()
 
     job_service = make_job_service(max_running=1, process_job_fn=process)
-    first_id = await job_service.submit("https://example.com/a")
-    second_id = await job_service.submit("https://example.com/b")
+    first_id = job_service.create_job("https://example.com/a").id
+    second_id = job_service.create_job("https://example.com/b").id
     job_service.try_start_jobs()
     await first_began.wait()
     first_task = job_service._task_manager._running_tasks[first_id]
@@ -260,12 +244,12 @@ async def test_try_start_jobs_starts_due_scheduled_ignoring_max_running(
         process_job_fn=hang,
         utcnow_fn=lambda: now,
     )
-    queued_id = await job_service.submit("https://example.com/queued")
+    queued_id = job_service.create_job("https://example.com/queued").id
     job_service.try_start_jobs()
-    scheduled_id = await job_service.submit(
+    scheduled_id = job_service.create_job(
         "https://example.com/scheduled",
         scheduled_at=now,
-    )
+    ).id
 
     # Act
     job_service.try_start_jobs()
@@ -290,11 +274,11 @@ async def test_try_start_jobs_prefers_due_scheduled_over_queued(
         process_job_fn=hang,
         utcnow_fn=lambda: now,
     )
-    queued_id = await job_service.submit("https://example.com/queued")
-    scheduled_id = await job_service.submit(
+    queued_id = job_service.create_job("https://example.com/queued").id
+    scheduled_id = job_service.create_job(
         "https://example.com/scheduled",
         scheduled_at=now,
-    )
+    ).id
 
     # Act
     job_service.try_start_jobs()
@@ -305,17 +289,16 @@ async def test_try_start_jobs_prefers_due_scheduled_over_queued(
     await job_service.shutdown()
 
 
-@pytest.mark.asyncio
-async def test_try_start_jobs_skips_scheduled_when_not_due(
+def test_try_start_jobs_skips_scheduled_when_not_due(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
     now = _SCHEDULED
     job_service = make_job_service(max_running=1, utcnow_fn=lambda: now)
-    job_id = await job_service.submit(
+    job_id = job_service.create_job(
         "https://example.com/scheduled",
         scheduled_at=now + timedelta(days=1),
-    )
+    ).id
 
     # Act
     job_service.try_start_jobs()
@@ -407,7 +390,7 @@ async def test_cancel_running_job_marks_cancelled(
         max_running=1,
         process_job_fn=hang_until_cancelled,
     )
-    job_id = await job_service.submit("https://example.com/video")
+    job_id = job_service.create_job("https://example.com/video").id
     job_service.try_start_jobs()
     await job_began.wait()
 
