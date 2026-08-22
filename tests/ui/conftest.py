@@ -16,7 +16,9 @@ from yt_dlp_server.settings import Settings
 
 
 class LiveServerFactory(Protocol):
-    def __call__(self, *, block_seconds: int = 0) -> AbstractContextManager[str]: ...
+    def __call__(
+        self, *, yt_dlp_cmd: tuple[str, ...]
+    ) -> AbstractContextManager[str]: ...
 
 
 def _free_port() -> int:
@@ -28,10 +30,10 @@ def _free_port() -> int:
 @pytest.fixture
 def live_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> LiveServerFactory:
     @contextmanager
-    def _start(*, block_seconds: int = 0) -> Iterator[str]:
+    def _start(*, yt_dlp_cmd: tuple[str, ...]) -> Iterator[str]:
         monkeypatch.setattr(
             "yt_dlp_server.process_job.build_yt_dlp_cmd",
-            lambda **kwargs: ("sleep", str(block_seconds)),
+            lambda **kwargs: yt_dlp_cmd,
         )
         app = create_app(
             Settings(
