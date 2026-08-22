@@ -128,3 +128,55 @@ def test_submit_invalid_url_shows_form_error(
         expect(error).to_be_visible()
         expect(error).to_contain_text("Invalid URL")
         expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
+
+
+def test_schedules_view_creates_and_cancels_schedule(
+    page: Page, live_server: LiveServer
+) -> None:
+    with live_server(yt_dlp_cmd=("sleep", "60")) as url:
+        # Arrange
+        page.goto(url)
+        page.get_by_role("link", name="Schedules").click()
+        expect(page.locator("#schedule-tz-hint")).to_contain_text("local timezone")
+        expect(page.locator("#schedules")).to_contain_text("No schedules yet.")
+
+        # Act
+        page.locator("#schedule-url-input").fill("https://example.com/live")
+        page.locator("#schedule-at-input").fill("2099-01-01T12:00")
+        page.locator("#schedule-btn").click()
+
+        # Assert
+        article = page.locator("#schedules article").first
+        expect(article).to_contain_text("https://example.com/live")
+        expect(article.locator(".status")).to_have_text("scheduled")
+        expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
+
+        # Act
+        article.get_by_role("button", name="Cancel").click()
+
+        # Assert
+        expect(page.locator("#schedules")).to_contain_text("No schedules yet.")
+
+
+def test_schedule_save_updates_time(page: Page, live_server: LiveServer) -> None:
+    with live_server(yt_dlp_cmd=("sleep", "60")) as url:
+        # Arrange
+        page.goto(url + "#schedules")
+        page.locator("#schedule-url-input").fill("https://example.com/live")
+        page.locator("#schedule-at-input").fill("2099-01-01T12:00")
+        page.locator("#schedule-btn").click()
+        article = page.locator("#schedules article").first
+        expect(article).to_be_visible()
+
+        # Act
+        at_input = article.locator('input[type="datetime-local"]')
+        at_input.fill("2099-06-01T18:30")
+        at_input.focus()
+        page.wait_for_timeout(2500)
+        expect(at_input).to_have_value("2099-06-01T18:30")
+        article.get_by_role("button", name="Save").click()
+
+        # Assert
+        expect(article.locator('input[type="datetime-local"]')).to_have_value(
+            "2099-06-01T18:30"
+        )

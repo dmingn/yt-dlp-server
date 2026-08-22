@@ -55,12 +55,29 @@
         margin: 0 0 1.25rem;
         font-size: 0.95rem;
       }
+      nav.tabs {
+        display: flex;
+        gap: 1rem;
+        margin: 0 0 1.25rem;
+      }
+      nav.tabs a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      nav.tabs a.active {
+        color: var(--fg);
+        font-weight: 700;
+      }
       form {
         display: flex;
         gap: 0.5rem;
         margin-bottom: 1.5rem;
       }
-      input[type="url"] {
+      form.wrap {
+        flex-wrap: wrap;
+      }
+      input[type="url"],
+      input[type="datetime-local"] {
         flex: 1;
         min-width: 0;
         padding: 0.7rem 0.8rem;
@@ -86,7 +103,7 @@
       }
       .error {
         color: var(--danger);
-        margin: -0.75rem 0 1rem;
+        margin: 0 0 1rem;
         font-size: 0.9rem;
       }
       .jobs {
@@ -137,6 +154,8 @@
       .actions {
         display: flex;
         justify-content: flex-end;
+        flex-wrap: wrap;
+        align-items: center;
         gap: 0.5rem;
         margin-top: 0.65rem;
       }
@@ -158,6 +177,11 @@
       .empty {
         color: var(--muted);
       }
+      .hint {
+        color: var(--muted);
+        margin: -0.75rem 0 1.25rem;
+        font-size: 0.85rem;
+      }
     </style>
   </head>
   <body>
@@ -165,27 +189,64 @@
       <h1>yt-dlp-server <span class="version">__VERSION__</span></h1>
       <p class="sub">
         Paste a video URL to download with the server’s fixed yt-dlp settings.
+        Use Schedules to start at a chosen time.
       </p>
-      <form id="submit-form">
-        <input
-          id="url-input"
-          type="url"
-          name="url"
-          placeholder="https://..."
-          required
-          autocomplete="off"
-        />
-        <button type="submit" id="submit-btn">Download</button>
-      </form>
+      <nav class="tabs">
+        <a id="jobs-nav" href="#jobs">Jobs</a>
+        <a id="schedules-nav" href="#schedules">Schedules</a>
+      </nav>
       <p id="form-error" class="error" hidden></p>
-      <section id="jobs" class="jobs" aria-live="polite"></section>
+      <div id="jobs-view">
+        <form id="submit-form">
+          <input
+            id="url-input"
+            type="url"
+            name="url"
+            placeholder="https://..."
+            required
+            autocomplete="off"
+          />
+          <button type="submit" id="submit-btn">Download</button>
+        </form>
+        <section id="jobs" class="jobs" aria-live="polite"></section>
+      </div>
+      <div id="schedules-view" hidden>
+        <form id="schedule-form" class="wrap">
+          <input
+            id="schedule-url-input"
+            type="url"
+            name="url"
+            placeholder="https://..."
+            required
+            autocomplete="off"
+          />
+          <input
+            id="schedule-at-input"
+            type="datetime-local"
+            required
+            aria-describedby="schedule-tz-hint"
+          />
+          <button type="submit" id="schedule-btn">Schedule</button>
+        </form>
+        <p id="schedule-tz-hint" class="hint"></p>
+        <section id="schedules" class="jobs" aria-live="polite"></section>
+      </div>
     </main>
     <script>
       const form = document.getElementById("submit-form");
       const urlInput = document.getElementById("url-input");
       const submitBtn = document.getElementById("submit-btn");
+      const scheduleForm = document.getElementById("schedule-form");
+      const scheduleUrlInput = document.getElementById("schedule-url-input");
+      const scheduleAtInput = document.getElementById("schedule-at-input");
+      const scheduleBtn = document.getElementById("schedule-btn");
       const formError = document.getElementById("form-error");
       const jobsEl = document.getElementById("jobs");
+      const schedulesEl = document.getElementById("schedules");
+      const jobsView = document.getElementById("jobs-view");
+      const schedulesView = document.getElementById("schedules-view");
+      const jobsNav = document.getElementById("jobs-nav");
+      const schedulesNav = document.getElementById("schedules-nav");
       let selectedId = null;
       let selectedDetail = null;
 
@@ -196,7 +257,42 @@
 
       function formatTime(iso) {
         if (!iso) return "—";
-        return new Date(iso).toLocaleString();
+        return new Date(iso).toLocaleString(undefined, { hour12: false });
+      }
+
+      function localTimezoneHint() {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const offsetPart = new Intl.DateTimeFormat("en-US", {
+          timeZoneName: "longOffset",
+        })
+          .formatToParts(new Date())
+          .find((part) => part.type === "timeZoneName");
+        const offset = offsetPart ? offsetPart.value : "";
+        return `Times are this browser’s local timezone (${timeZone}, ${offset}).`;
+      }
+
+      function pad2(n) {
+        return String(n).padStart(2, "0");
+      }
+
+      function toDatetimeLocalValue(iso) {
+        const d = new Date(iso);
+        return (
+          `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` +
+          `T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+        );
+      }
+
+      function currentView() {
+        return location.hash === "#schedules" ? "schedules" : "jobs";
+      }
+
+      function applyView() {
+        const view = currentView();
+        jobsView.hidden = view !== "jobs";
+        schedulesView.hidden = view !== "schedules";
+        jobsNav.classList.toggle("active", view === "jobs");
+        schedulesNav.classList.toggle("active", view === "schedules");
       }
 
       async function refreshJobs() {
@@ -216,7 +312,12 @@
           selectedDetail = detailRes.ok ? await detailRes.json() : null;
           if (!selectedDetail) selectedId = null;
         }
-        renderJobs(jobs);
+        renderJobs(jobs.filter((job) => job.status !== "scheduled"));
+        renderSchedules(
+          jobs
+            .filter((job) => job.status === "scheduled")
+            .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
+        );
       }
 
       function captureLogScroll() {
@@ -259,6 +360,7 @@
             </div>
             <div class="meta">
               created ${formatTime(job.created_at)}
+              ${job.scheduled_at ? " · scheduled " + formatTime(job.scheduled_at) : ""}
               · logs ${job.log_line_count}
               ${job.error ? " · " + escapeHtml(job.error) : ""}
             </div>
@@ -266,32 +368,7 @@
           if (job.status === "queued" || job.status === "running") {
             const actions = document.createElement("div");
             actions.className = "actions";
-            const cancelBtn = document.createElement("button");
-            cancelBtn.type = "button";
-            cancelBtn.className = "secondary danger";
-            cancelBtn.textContent = "Cancel";
-            cancelBtn.addEventListener("click", async (event) => {
-              event.stopPropagation();
-              cancelBtn.disabled = true;
-              try {
-                const res = await fetch("/api/cancelJob", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ id: job.id }),
-                });
-                if (!res.ok) {
-                  throw new Error("Cancel failed");
-                }
-                await refreshJobs();
-              } catch {
-                cancelBtn.disabled = false;
-                cancelBtn.textContent = "Cancel failed";
-                setTimeout(() => {
-                  cancelBtn.textContent = "Cancel";
-                }, 1500);
-              }
-            });
-            actions.appendChild(cancelBtn);
+            actions.appendChild(cancelButton(job.id));
             article.appendChild(actions);
           }
           if (job.id === selectedId && selectedDetail) {
@@ -339,6 +416,99 @@
         window.scrollTo(0, pageY);
       }
 
+      function cancelButton(jobId) {
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.className = "secondary danger";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          cancelBtn.disabled = true;
+          try {
+            const res = await fetch("/api/cancelJob", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: jobId }),
+            });
+            if (!res.ok) {
+              throw new Error("Cancel failed");
+            }
+            await refreshJobs();
+          } catch {
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = "Cancel failed";
+            setTimeout(() => {
+              cancelBtn.textContent = "Cancel";
+            }, 1500);
+          }
+        });
+        return cancelBtn;
+      }
+
+      function renderSchedules(jobs) {
+        const active = document.activeElement;
+        // Skip redraw while a row datetime is focused so poll does not reset it.
+        if (
+          active &&
+          schedulesEl.contains(active) &&
+          active.tagName === "INPUT"
+        ) {
+          return;
+        }
+        if (!jobs.length) {
+          schedulesEl.innerHTML = '<p class="empty">No schedules yet.</p>';
+          return;
+        }
+        schedulesEl.innerHTML = "";
+        for (const job of jobs) {
+          const article = document.createElement("article");
+          article.dataset.jobId = job.id;
+          article.innerHTML = `
+            <div class="row">
+              <div class="url">${escapeHtml(job.url)}</div>
+              <div class="status">${escapeHtml(job.status)}</div>
+            </div>
+            <div class="meta">scheduled ${formatTime(job.scheduled_at)}</div>
+          `;
+          const actions = document.createElement("div");
+          actions.className = "actions";
+          const atInput = document.createElement("input");
+          atInput.type = "datetime-local";
+          atInput.setAttribute("aria-describedby", "schedule-tz-hint");
+          atInput.value = toDatetimeLocalValue(job.scheduled_at);
+          const saveBtn = document.createElement("button");
+          saveBtn.type = "button";
+          saveBtn.className = "secondary";
+          saveBtn.textContent = "Save";
+          saveBtn.addEventListener("click", async () => {
+            showError("");
+            saveBtn.disabled = true;
+            try {
+              const res = await fetch("/api/rescheduleJob", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: job.id,
+                  scheduled_at: new Date(atInput.value).toISOString(),
+                }),
+              });
+              if (!res.ok) {
+                throw new Error("Reschedule failed");
+              }
+              await refreshJobs();
+            } catch (err) {
+              saveBtn.disabled = false;
+              showError(err.message || String(err));
+            }
+          });
+          actions.appendChild(atInput);
+          actions.appendChild(saveBtn);
+          actions.appendChild(cancelButton(job.id));
+          article.appendChild(actions);
+          schedulesEl.appendChild(article);
+        }
+      }
+
       async function selectJob(id) {
         selectedId = selectedId === id ? null : id;
         selectedDetail = null;
@@ -384,6 +554,43 @@
         }
       });
 
+      scheduleForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showError("");
+        scheduleBtn.disabled = true;
+        try {
+          const res = await fetch("/api/createJob", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: scheduleUrlInput.value.trim(),
+              scheduled_at: new Date(scheduleAtInput.value).toISOString(),
+            }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            const detail =
+              body && body.detail
+                ? typeof body.detail === "string"
+                  ? body.detail
+                  : "Invalid URL"
+                : `Request failed (${res.status})`;
+            throw new Error(detail);
+          }
+          scheduleUrlInput.value = "";
+          scheduleAtInput.value = "";
+          await refreshJobs();
+        } catch (err) {
+          showError(err.message || String(err));
+        } finally {
+          scheduleBtn.disabled = false;
+        }
+      });
+
+      document.getElementById("schedule-tz-hint").textContent =
+        localTimezoneHint();
+      window.addEventListener("hashchange", applyView);
+      applyView();
       refreshJobs().catch((err) => showError(err.message || String(err)));
       setInterval(() => {
         refreshJobs().catch(() => {});
