@@ -87,6 +87,14 @@ class ScheduledJob(_JobBase):
             log=JobLog(),
         )
 
+    def reschedule(self, *, scheduled_at: datetime) -> ScheduledJob:
+        return ScheduledJob(
+            id=self.id,
+            url=self.url,
+            created_at=self.created_at,
+            scheduled_at=scheduled_at,
+        )
+
 
 class _RunningJobBase(_JobBase):
     status: Literal[JobStatus.running] = JobStatus.running
