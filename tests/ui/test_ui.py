@@ -8,7 +8,7 @@ LiveServer = Callable[..., AbstractContextManager[str]]
 
 def test_index_shows_empty_jobs(page: Page, live_server: LiveServer) -> None:
     # Act
-    with live_server() as url:
+    with live_server(yt_dlp_cmd=("sleep", "0")) as url:
         page.goto(url)
 
         # Assert
@@ -20,7 +20,7 @@ def test_index_shows_empty_jobs(page: Page, live_server: LiveServer) -> None:
 def test_submit_job_shows_selected_job_with_log(
     page: Page, live_server: LiveServer
 ) -> None:
-    with live_server() as url:
+    with live_server(yt_dlp_cmd=("sleep", "0")) as url:
         # Arrange
         page.goto(url)
 
@@ -38,10 +38,63 @@ def test_submit_job_shows_selected_job_with_log(
         expect(article.locator("pre")).to_be_visible()
 
 
+def test_job_log_follows_tail_and_keeps_manual_scroll(
+    page: Page, live_server: LiveServer
+) -> None:
+    with live_server(
+        yt_dlp_cmd=(
+            "python",
+            "-c",
+            "print('\\n'.join(str(i) for i in range(200)))",
+        )
+    ) as url:
+        # Arrange
+        page.goto(url)
+        page.locator("#url-input").fill("https://example.com/video")
+        page.locator("#submit-btn").click()
+        pre = page.locator("#jobs article.selected pre")
+        expect(pre).to_contain_text("199")
+        page.wait_for_function(
+            """() => {
+              const el = document.querySelector("#jobs article.selected pre");
+              return el && el.scrollHeight > el.clientHeight + 40;
+            }"""
+        )
+
+        # Assert: opening a log pins to the latest lines
+        assert page.evaluate(
+            """() => {
+              const el = document.querySelector("#jobs article.selected pre");
+              return el.scrollHeight - el.clientHeight - el.scrollTop < 24;
+            }"""
+        )
+
+        # Act: scroll away from the tail, then wait for the 2s poll redraw
+        page.evaluate(
+            """() => {
+              const el = document.querySelector("#jobs article.selected pre");
+              el.dataset.seen = "1";
+              el.scrollTop = 80;
+            }"""
+        )
+        page.wait_for_function(
+            """() => {
+              const el = document.querySelector("#jobs article.selected pre");
+              return el && el.dataset.seen !== "1";
+            }"""
+        )
+
+        # Assert: a redraw must not jump back to the top
+        scroll_top = page.evaluate(
+            """() => document.querySelector("#jobs article.selected pre").scrollTop"""
+        )
+        assert 50 <= scroll_top <= 110
+
+
 def test_cancel_button_cancels_job(page: Page, live_server: LiveServer) -> None:
     # UI covers the cancel control end-to-end once; queued vs running cancel
     # semantics are asserted in the API tests.
-    with live_server(block_seconds=60) as url:
+    with live_server(yt_dlp_cmd=("sleep", "60")) as url:
         # Arrange
         page.goto(url)
         page.locator("#url-input").fill("https://example.com/video")
@@ -60,7 +113,7 @@ def test_cancel_button_cancels_job(page: Page, live_server: LiveServer) -> None:
 def test_submit_invalid_url_shows_form_error(
     page: Page, live_server: LiveServer
 ) -> None:
-    with live_server() as url:
+    with live_server(yt_dlp_cmd=("sleep", "0")) as url:
         # Arrange: disable form validation (noValidate) so type=url does not block
         # submit and the API error path can populate #form-error
         page.goto(url)

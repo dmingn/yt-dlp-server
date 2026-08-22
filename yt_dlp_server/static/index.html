@@ -219,7 +219,29 @@
         renderJobs(jobs);
       }
 
+      function captureLogScroll() {
+        const article = jobsEl.querySelector("article.selected");
+        const pre = article && article.querySelector("pre");
+        if (!pre) return { id: null, stick: true, top: 0 };
+        const threshold = 24;
+        return {
+          id: article.dataset.jobId,
+          stick:
+            pre.scrollTop + pre.clientHeight >= pre.scrollHeight - threshold,
+          top: pre.scrollTop,
+        };
+      }
+
+      function restoreLogScroll(pre, previous) {
+        pre.scrollTop =
+          previous.id !== selectedId || previous.stick
+            ? pre.scrollHeight
+            : previous.top;
+      }
+
       function renderJobs(jobs) {
+        const previousLogScroll = captureLogScroll();
+        const pageY = window.scrollY;
         if (!jobs.length) {
           jobsEl.innerHTML = '<p class="empty">No jobs yet.</p>';
           return;
@@ -227,6 +249,7 @@
         jobsEl.innerHTML = "";
         for (const job of jobs) {
           const article = document.createElement("article");
+          article.dataset.jobId = job.id;
           if (job.id === selectedId) article.classList.add("selected");
           article.tabIndex = 0;
           article.innerHTML = `
@@ -311,6 +334,9 @@
           });
           jobsEl.appendChild(article);
         }
+        const pre = jobsEl.querySelector("article.selected pre");
+        if (pre) restoreLogScroll(pre, previousLogScroll);
+        window.scrollTo(0, pageY);
       }
 
       async function selectJob(id) {
