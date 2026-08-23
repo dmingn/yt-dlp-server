@@ -31,6 +31,7 @@ Unset `POT_BASE_URL` to leave yt-dlp defaults (no pot extractor-args).
 
 Default is 1 concurrent download (`MAX_RUNNING`).
 `MAX_JOBS` caps unfinished jobs and how many finished jobs are retained.
+`UMASK` is an octal mask (for example `0002`) applied at startup so downloads and the SQLite file inherit it; unset leaves the process umask unchanged.
 
 ## Local development
 

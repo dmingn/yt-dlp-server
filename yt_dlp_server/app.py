@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +19,9 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+
+    if settings.umask is not None:
+        os.umask(int(settings.umask, 8))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
