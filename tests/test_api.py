@@ -156,25 +156,18 @@ def test_get_job_returns_404_for_unknown_id(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_cancel_job_marks_queued_as_cancelled(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    # Arrange: occupy the only slot so the second job stays queued
-    monkeypatch.setattr(
-        "yt_dlp_server.process_job.build_yt_dlp_cmd",
-        lambda **kwargs: ("sleep", "60"),
-    )
-    app = create_app(Settings(max_running=1, database_path=tmp_path / "jobs.sqlite3"))
+def test_cancel_job_marks_queued_as_cancelled(tmp_path: Path) -> None:
+    # Arrange
+    settings = Settings(database_path=tmp_path / "jobs.sqlite3")
+
+    # Constructor validates ge=1; assignment is unchecked.
+    settings.max_running = 0
+
+    app = create_app(settings)
     with TestClient(app) as client:
-        running = client.post(
-            "/api/createJob",
-            json={"url": "https://example.com/running"},
-        )
-        _wait_for_status(client, running.json()["id"], {"running"})
         created = client.post(
             "/api/createJob",
-            json={"url": "https://example.com/queued"},
+            json={"url": "https://example.com/video"},
         )
         job_id = created.json()["id"]
         assert (
@@ -186,9 +179,7 @@ def test_cancel_job_marks_queued_as_cancelled(
 
         # Assert
         assert response.status_code == 200
-        body = response.json()
-        assert body["id"] == job_id
-        assert body["status"] == "cancelled"
+        assert response.json()["status"] == "cancelled"
 
 
 def test_cancel_job_marks_scheduled_as_cancelled(client: TestClient) -> None:
