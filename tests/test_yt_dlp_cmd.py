@@ -1,6 +1,10 @@
 import sys
 
-from yt_dlp_server.yt_dlp_cmd import build_output_template, build_yt_dlp_cmd
+from yt_dlp_server.yt_dlp_cmd import (
+    CACHE_DIR,
+    build_output_template,
+    build_yt_dlp_cmd,
+)
 
 
 def test_build_yt_dlp_cmd_without_pot() -> None:
@@ -19,6 +23,8 @@ def test_build_yt_dlp_cmd_without_pot() -> None:
         "yt_dlp",
         "-o",
         build_output_template(output_dir),
+        "--cache-dir",
+        CACHE_DIR,
         "--no-progress",
         url,
     )
@@ -45,6 +51,8 @@ def test_build_yt_dlp_cmd_with_pot_base_url() -> None:
         "yt_dlp",
         "-o",
         build_output_template(output_dir),
+        "--cache-dir",
+        CACHE_DIR,
         "--no-progress",
         "--extractor-args",
         "youtube:player_client=mweb",
@@ -70,6 +78,8 @@ def test_build_yt_dlp_cmd_wait_and_retry() -> None:
         "yt_dlp",
         "-o",
         build_output_template(output_dir),
+        "--cache-dir",
+        CACHE_DIR,
         "--no-progress",
         "--wait-for-video",
         "15-60",
