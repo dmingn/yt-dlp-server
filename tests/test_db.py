@@ -18,6 +18,11 @@ _JOBS_COLUMNS = (
     "error",
     "scheduled_at",
 )
+_JOB_LOG_LINES_COLUMNS = (
+    "job_id",
+    "seq",
+    "line",
+)
 
 
 def test_connect_applies_schema_version(tmp_path: Path) -> None:
@@ -35,10 +40,15 @@ def test_connect_applies_schema_version(tmp_path: Path) -> None:
     }
     assert "jobs" in tables
     assert "job_log_lines" in tables
-    columns = tuple(
-        str(row[1]) for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
-    )
-    assert columns == _JOBS_COLUMNS
+    for table, expected in (
+        ("jobs", _JOBS_COLUMNS),
+        ("job_log_lines", _JOB_LOG_LINES_COLUMNS),
+    ):
+        columns = tuple(
+            str(row[1])
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        )
+        assert columns == expected
     conn.close()
 
 
