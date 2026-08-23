@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 from yt_dlp_server.yt_dlp_cmd import (
     CACHE_DIR,
     build_output_template,
@@ -30,11 +32,17 @@ def test_build_yt_dlp_cmd_without_pot() -> None:
     )
 
 
-def test_build_yt_dlp_cmd_with_pot_base_url() -> None:
+@pytest.mark.parametrize(
+    "pot_base_url",
+    [
+        pytest.param("http://pot-provider:4416", id="no-trailing-slash"),
+        pytest.param("http://pot-provider:4416/", id="trailing-slash"),
+    ],
+)
+def test_build_yt_dlp_cmd_with_pot_base_url(pot_base_url: str) -> None:
     # Arrange
     url = "https://example.com/video"
     output_dir = "/data"
-    pot_base_url = "http://pot-provider:4416"
 
     # Act
     cmd = build_yt_dlp_cmd(
@@ -57,7 +65,7 @@ def test_build_yt_dlp_cmd_with_pot_base_url() -> None:
         "--extractor-args",
         "youtube:player_client=mweb",
         "--extractor-args",
-        f"youtubepot-bgutilhttp:base_url={pot_base_url}",
+        "youtubepot-bgutilhttp:base_url=http://pot-provider:4416",
         url,
     )
 
