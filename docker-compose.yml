@@ -3,6 +3,18 @@ services:
     image: brainicism/bgutil-ytdlp-pot-provider:1.3.2
     init: true
     restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4416/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
   app:
     build:
       context: .
@@ -22,4 +34,5 @@ services:
       DATABASE_PATH: "/data/jobs.sqlite3"
       POT_BASE_URL: "http://pot-provider:4416"
     depends_on:
-      - pot-provider
+      pot-provider:
+        condition: service_healthy
