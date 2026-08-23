@@ -26,3 +26,8 @@ class Settings(BaseSettings):
     pot_base_url: AnyHttpUrl | None = None
     host: str = "0.0.0.0"
     port: int = 8000
+    umask: str | None = Field(
+        default=None,
+        pattern=r"^0?[0-7]{1,3}$",
+        description="Octal process umask (e.g. 0022). Unset leaves the process umask unchanged.",
+    )
