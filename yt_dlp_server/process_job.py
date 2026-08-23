@@ -22,7 +22,7 @@ async def process_job(
     output_dir: str,
     pot_base_url: str | None = None,
 ) -> None:
-    job = job_service.get(job_id)
+    job = job_service.get_job(job_id)
     if not isinstance(job, RunningJob):
         return
 
@@ -50,21 +50,21 @@ async def process_job(
 
         exit_code = await proc.wait()
         if exit_code == 0:
-            job_service.mark_succeeded(job_id)
+            job_service.mark_job_succeeded(job_id)
         else:
-            job_service.mark_failed(
+            job_service.mark_job_failed(
                 job_id,
                 error=f"yt-dlp exited with code {exit_code}",
                 exit_code=exit_code,
             )
     except asyncio.CancelledError:
         # Do not update job status here. Why, for each cancel path:
-        # - UI/API cancel: JobService.cancel already saved status=cancelled.
+        # - UI/API cancel: JobService.cancel_job already saved status=cancelled.
         # - Process shutdown (e.g. SIGINT): leave status as running so the
         #   next startup can re-queue the job.
         raise
     except Exception as exc:
-        job_service.mark_failed(job_id, error=f"{type(exc).__name__}: {exc}")
+        job_service.mark_job_failed(job_id, error=f"{type(exc).__name__}: {exc}")
     finally:
         if proc is not None and proc.returncode is None:
             proc.kill()

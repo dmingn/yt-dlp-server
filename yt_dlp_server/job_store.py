@@ -103,7 +103,7 @@ class JobStore:
                 (job_id, job_id, self._max_log_lines),
             )
 
-    def claim_oldest_queued(
+    def claim_oldest_queued_job(
         self, *, started_at: datetime
     ) -> ImmediateRunningJob | None:
         """Take ownership of the oldest queued job by marking it running."""
@@ -123,11 +123,11 @@ class JobStore:
             job = self._job_from_row(row)
             assert isinstance(job, QueuedJob)
 
-            running = job.start(started_at=started_at)
-            self._upsert_metadata(running)
-            return running
+            running_job = job.start(started_at=started_at)
+            self._upsert_metadata(running_job)
+            return running_job
 
-    def claim_due_scheduled(self, *, now: datetime) -> ScheduledRunningJob | None:
+    def claim_due_scheduled_job(self, *, now: datetime) -> ScheduledRunningJob | None:
         """Take ownership of the earliest due scheduled job by marking it running."""
         with self._conn:
             row = self._conn.execute(
@@ -150,13 +150,13 @@ class JobStore:
             job = self._job_from_row(row)
             assert isinstance(job, ScheduledJob)
 
-            running = job.start(started_at=now)
-            self._upsert_metadata(running)
-            return running
+            running_job = job.start(started_at=now)
+            self._upsert_metadata(running_job)
+            return running_job
 
     def restore_waiting_jobs(self) -> None:
-        running = [job for job in self.list_jobs() if isinstance(job, RunningJob)]
-        for job in running:
+        running_jobs = [job for job in self.list_jobs() if isinstance(job, RunningJob)]
+        for job in running_jobs:
             with self._conn:
                 self._upsert_metadata(job.to_waiting())
                 self._conn.execute(

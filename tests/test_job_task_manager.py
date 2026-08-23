@@ -7,7 +7,7 @@ from yt_dlp_server.models import JobId
 
 
 @pytest.mark.asyncio
-async def test_spawn_starts_task() -> None:
+async def test_spawn_task_starts_task() -> None:
     # Arrange
     job_id = JobId("job")
     job_began = asyncio.Event()
@@ -19,7 +19,7 @@ async def test_spawn_starts_task() -> None:
     task_manager = JobTaskManager(process_job_fn=hang)
 
     # Act
-    task_manager.spawn(job_id)
+    task_manager.spawn_task(job_id)
     await job_began.wait()
 
     # Assert
@@ -28,7 +28,7 @@ async def test_spawn_starts_task() -> None:
 
 
 @pytest.mark.asyncio
-async def test_spawn_ignores_duplicate_id() -> None:
+async def test_spawn_task_ignores_duplicate_id() -> None:
     # Arrange
     job_id = JobId("job")
     job_began = asyncio.Event()
@@ -42,8 +42,8 @@ async def test_spawn_ignores_duplicate_id() -> None:
     task_manager = JobTaskManager(process_job_fn=hang)
 
     # Act
-    task_manager.spawn(job_id)
-    task_manager.spawn(job_id)
+    task_manager.spawn_task(job_id)
+    task_manager.spawn_task(job_id)
     await job_began.wait()
 
     # Assert
@@ -53,7 +53,7 @@ async def test_spawn_ignores_duplicate_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_spawn_after_shutdown_is_ignored() -> None:
+async def test_spawn_task_after_shutdown_is_ignored() -> None:
     # Arrange
     async def hang(_job_id: JobId) -> None:
         await asyncio.Future()
@@ -62,14 +62,14 @@ async def test_spawn_after_shutdown_is_ignored() -> None:
     await task_manager.shutdown()
 
     # Act
-    task_manager.spawn(JobId("job"))
+    task_manager.spawn_task(JobId("job"))
 
     # Assert
     assert task_manager.running_count == 0
 
 
 @pytest.mark.asyncio
-async def test_cancel_stops_running_task() -> None:
+async def test_cancel_task_stops_running_task() -> None:
     # Arrange
     job_id = JobId("job")
     job_began = asyncio.Event()
@@ -84,11 +84,11 @@ async def test_cancel_stops_running_task() -> None:
             raise
 
     task_manager = JobTaskManager(process_job_fn=hang)
-    task_manager.spawn(job_id)
+    task_manager.spawn_task(job_id)
     await job_began.wait()
 
     # Act
-    await task_manager.cancel(job_id)
+    await task_manager.cancel_task(job_id)
 
     # Assert
     assert process_task_cancelled.is_set()
@@ -111,8 +111,8 @@ async def test_shutdown_cancels_running_tasks() -> None:
             raise
 
     task_manager = JobTaskManager(process_job_fn=hang)
-    task_manager.spawn(JobId("job-1"))
-    task_manager.spawn(JobId("job-2"))
+    task_manager.spawn_task(JobId("job-1"))
+    task_manager.spawn_task(JobId("job-2"))
     await job_began.wait()
 
     # Act
