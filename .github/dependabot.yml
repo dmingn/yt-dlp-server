@@ -24,3 +24,14 @@ updates:
           - "patch"
         exclude-patterns:
           - "yt-dlp"
+  - package-ecosystem: "npm"
+    directory: "/ui"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
