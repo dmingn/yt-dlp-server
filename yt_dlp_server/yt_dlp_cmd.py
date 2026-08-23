@@ -6,6 +6,7 @@ OUTPUT_NAME_TEMPLATE: Final[str] = (
     "%(playlist)s - %(playlist_id)s/"
     "%(title)s - %(id)s.%(ext)s"
 )
+CACHE_DIR: Final[str] = "/tmp/yt-dlp-cache"
 
 
 def build_output_template(output_dir: str) -> str:
@@ -26,6 +27,8 @@ def build_yt_dlp_cmd(
         "yt_dlp",
         "-o",
         build_output_template(output_dir),
+        "--cache-dir",
+        CACHE_DIR,
         "--no-progress",
     ]
 
