@@ -339,12 +339,12 @@ def test_evict_deletes_log_lines(tmp_path: Path) -> None:
         assert isinstance(job_store.get_job(JobId("job-2")), QueuedJob)
 
 
-def test_claim_oldest_queued_returns_none_when_empty(job_store: JobStore) -> None:
+def test_claim_oldest_queued_job_returns_none_when_empty(job_store: JobStore) -> None:
     # Act / Assert
-    assert job_store.claim_oldest_queued(started_at=_STARTED_AT) is None
+    assert job_store.claim_oldest_queued_job(started_at=_STARTED_AT) is None
 
 
-def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> None:
+def test_claim_oldest_queued_job_claims_in_created_order(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
         QueuedJob(
@@ -362,8 +362,8 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
     )
 
     # Act
-    first = job_store.claim_oldest_queued(started_at=_STARTED_AT)
-    second = job_store.claim_oldest_queued(started_at=_STARTED_AT_2)
+    first = job_store.claim_oldest_queued_job(started_at=_STARTED_AT)
+    second = job_store.claim_oldest_queued_job(started_at=_STARTED_AT_2)
 
     # Assert
     assert isinstance(first, RunningJob)
@@ -372,10 +372,10 @@ def test_claim_oldest_queued_claims_in_created_order(job_store: JobStore) -> Non
     assert isinstance(second, RunningJob)
     assert second.id == JobId("job-2")
     assert second.started_at == _STARTED_AT_2
-    assert job_store.claim_oldest_queued(started_at=_STARTED_AT) is None
+    assert job_store.claim_oldest_queued_job(started_at=_STARTED_AT) is None
 
 
-def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
+def test_claim_oldest_queued_job_skips_non_queued(job_store: JobStore) -> None:
     # Arrange
     job_store.save_metadata(
         ScheduledJob(
@@ -435,22 +435,22 @@ def test_claim_oldest_queued_skips_non_queued(job_store: JobStore) -> None:
     )
 
     # Act
-    claimed = job_store.claim_oldest_queued(started_at=_STARTED_AT)
+    claimed_job = job_store.claim_oldest_queued_job(started_at=_STARTED_AT)
 
     # Assert
-    assert isinstance(claimed, RunningJob)
-    assert claimed.id == JobId("queued")
+    assert isinstance(claimed_job, RunningJob)
+    assert claimed_job.id == JobId("queued")
 
 
-def test_claim_due_scheduled_returns_none_when_empty(job_store: JobStore) -> None:
+def test_claim_due_scheduled_job_returns_none_when_empty(job_store: JobStore) -> None:
     # Arrange
     now = datetime.fromisoformat("2026-03-01T00:00:00+00:00")  # any aware datetime
 
     # Act / Assert
-    assert job_store.claim_due_scheduled(now=now) is None
+    assert job_store.claim_due_scheduled_job(now=now) is None
 
 
-def test_claim_due_scheduled_skips_when_not_due(job_store: JobStore) -> None:
+def test_claim_due_scheduled_job_skips_when_not_due(job_store: JobStore) -> None:
     # Arrange
     now = _SCHEDULED_AT
     job_store.save_metadata(
@@ -463,10 +463,10 @@ def test_claim_due_scheduled_skips_when_not_due(job_store: JobStore) -> None:
     )
 
     # Act / Assert
-    assert job_store.claim_due_scheduled(now=now) is None
+    assert job_store.claim_due_scheduled_job(now=now) is None
 
 
-def test_claim_due_scheduled_claims_in_scheduled_order(job_store: JobStore) -> None:
+def test_claim_due_scheduled_job_claims_in_scheduled_order(job_store: JobStore) -> None:
     # Arrange
     now = _SCHEDULED_AT_2
     job_store.save_metadata(
@@ -487,8 +487,8 @@ def test_claim_due_scheduled_claims_in_scheduled_order(job_store: JobStore) -> N
     )
 
     # Act
-    first = job_store.claim_due_scheduled(now=now)
-    second = job_store.claim_due_scheduled(now=now)
+    first = job_store.claim_due_scheduled_job(now=now)
+    second = job_store.claim_due_scheduled_job(now=now)
 
     # Assert
     assert isinstance(first, ScheduledRunningJob)
@@ -496,10 +496,10 @@ def test_claim_due_scheduled_claims_in_scheduled_order(job_store: JobStore) -> N
     assert first.started_at == now
     assert isinstance(second, ScheduledRunningJob)
     assert second.id == JobId("later")
-    assert job_store.claim_due_scheduled(now=now) is None
+    assert job_store.claim_due_scheduled_job(now=now) is None
 
 
-def test_claim_due_scheduled_skips_non_scheduled(job_store: JobStore) -> None:
+def test_claim_due_scheduled_job_skips_non_scheduled(job_store: JobStore) -> None:
     # Arrange
     scheduled_at = _SCHEDULED_AT
     now = scheduled_at
@@ -520,15 +520,15 @@ def test_claim_due_scheduled_skips_non_scheduled(job_store: JobStore) -> None:
     )
 
     # Act
-    claimed = job_store.claim_due_scheduled(now=now)
+    claimed_job = job_store.claim_due_scheduled_job(now=now)
 
     # Assert
-    assert isinstance(claimed, ScheduledRunningJob)
-    assert claimed.id == JobId("due")
+    assert isinstance(claimed_job, ScheduledRunningJob)
+    assert claimed_job.id == JobId("due")
 
 
 @pytest.mark.parametrize(
-    ("running", "expected"),
+    ("running_job", "expected"),
     [
         (
             ImmediateRunningJob(
@@ -564,11 +564,11 @@ def test_claim_due_scheduled_skips_non_scheduled(job_store: JobStore) -> None:
 )
 def test_restore_waiting_jobs_from_running(
     job_store: JobStore,
-    running: RunningJob,
+    running_job: RunningJob,
     expected: QueuedJob | ScheduledJob,
 ) -> None:
     # Arrange
-    job_store.save_metadata(running)
+    job_store.save_metadata(running_job)
     job_store.append_log(JobId("job-1"), "partial\n")
 
     # Act

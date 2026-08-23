@@ -83,21 +83,21 @@ class JobService:
         now = self._utcnow_fn()
 
         while not self._task_manager.closed:
-            due_job = self._store.claim_due_scheduled(now=now)
+            due_job = self._store.claim_due_scheduled_job(now=now)
             if due_job is None:
                 break
-            self._task_manager.spawn(due_job.id)
+            self._task_manager.spawn_task(due_job.id)
 
         while (
             not self._task_manager.closed
             and self._task_manager.running_count < self._max_running
         ):
-            queued_job = self._store.claim_oldest_queued(started_at=now)
+            queued_job = self._store.claim_oldest_queued_job(started_at=now)
             if queued_job is None:
                 return
-            self._task_manager.spawn(queued_job.id)
+            self._task_manager.spawn_task(queued_job.id)
 
-    def get(self, job_id: JobId) -> Job | None:
+    def get_job(self, job_id: JobId) -> Job | None:
         return self._store.get_job(job_id)
 
     def list_summaries(self) -> list[JobSummary]:
@@ -109,15 +109,15 @@ class JobService:
             return
         self._store.append_log(job_id, line)
 
-    def mark_succeeded(self, job_id: JobId) -> SucceededJob | None:
+    def mark_job_succeeded(self, job_id: JobId) -> SucceededJob | None:
         job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
-        succeeded = job.succeed(finished_at=self._utcnow_fn())
-        self._store.save_metadata(succeeded)
-        return succeeded
+        succeeded_job = job.succeed(finished_at=self._utcnow_fn())
+        self._store.save_metadata(succeeded_job)
+        return succeeded_job
 
-    def mark_failed(
+    def mark_job_failed(
         self,
         job_id: JobId,
         *,
@@ -127,15 +127,15 @@ class JobService:
         job = self._store.get_job(job_id)
         if not isinstance(job, RunningJob):
             return None
-        failed = job.fail(
+        failed_job = job.fail(
             finished_at=self._utcnow_fn(),
             error=error,
             exit_code=exit_code,
         )
-        self._store.save_metadata(failed)
-        return failed
+        self._store.save_metadata(failed_job)
+        return failed_job
 
-    async def cancel(self, job_id: JobId) -> CancelledJob | None:
+    async def cancel_job(self, job_id: JobId) -> CancelledJob | None:
         job = self._store.get_job(job_id)
 
         if job is None:
@@ -144,33 +144,33 @@ class JobService:
             return None
 
         if isinstance(job, QueuedJob):
-            immediate_cancelled = job.cancel(finished_at=self._utcnow_fn())
-            self._store.save_metadata(immediate_cancelled)
-            return immediate_cancelled
+            immediate_cancelled_job = job.cancel(finished_at=self._utcnow_fn())
+            self._store.save_metadata(immediate_cancelled_job)
+            return immediate_cancelled_job
 
         if isinstance(job, ScheduledJob):
-            scheduled_cancelled = job.cancel(finished_at=self._utcnow_fn())
-            self._store.save_metadata(scheduled_cancelled)
-            return scheduled_cancelled
+            scheduled_cancelled_job = job.cancel(finished_at=self._utcnow_fn())
+            self._store.save_metadata(scheduled_cancelled_job)
+            return scheduled_cancelled_job
 
         if isinstance(job, RunningJob):
-            cancelled = job.cancel(finished_at=self._utcnow_fn())
-            self._store.save_metadata(cancelled)
-            await self._task_manager.cancel(job_id)
-            return cancelled
+            cancelled_job = job.cancel(finished_at=self._utcnow_fn())
+            self._store.save_metadata(cancelled_job)
+            await self._task_manager.cancel_task(job_id)
+            return cancelled_job
 
         assert_never(job)
 
-    def reschedule(
+    def reschedule_job(
         self, job_id: JobId, *, scheduled_at: datetime
     ) -> ScheduledJob | None:
         job = self._store.get_job(job_id)
         if not isinstance(job, ScheduledJob):
             return None
 
-        rescheduled = job.reschedule(scheduled_at=scheduled_at)
-        self._store.save_metadata(rescheduled)
-        return rescheduled
+        rescheduled_job = job.reschedule(scheduled_at=scheduled_at)
+        self._store.save_metadata(rescheduled_job)
+        return rescheduled_job
 
     def restore_waiting_jobs(self) -> None:
         self._store.restore_waiting_jobs()

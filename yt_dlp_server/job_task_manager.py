@@ -25,7 +25,7 @@ class JobTaskManager:
     def closed(self) -> bool:
         return self._closed
 
-    def spawn(self, job_id: JobId) -> None:
+    def spawn_task(self, job_id: JobId) -> None:
         if self._closed or job_id in self._running_tasks:
             return
 
@@ -36,7 +36,7 @@ class JobTaskManager:
         self._running_tasks[job_id] = task
         task.add_done_callback(partial(self._on_task_done, job_id))
 
-    async def cancel(self, job_id: JobId) -> None:
+    async def cancel_task(self, job_id: JobId) -> None:
         task = self._running_tasks.get(job_id)
         if task is None:
             return

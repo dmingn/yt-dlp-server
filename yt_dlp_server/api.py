@@ -61,7 +61,7 @@ async def list_jobs(request: Request) -> list[JobSummary]:
 
 @router.post("/getJob", response_model=Job)
 async def get_job(body: GetJobRequest, request: Request) -> Job:
-    job = _job_service_from_request(request).get(body.id)
+    job = _job_service_from_request(request).get_job(body.id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -71,25 +71,27 @@ async def get_job(body: GetJobRequest, request: Request) -> Job:
 async def cancel_job(body: CancelJobRequest, request: Request) -> CancelledJob:
     job_service = _job_service_from_request(request)
 
-    if job_service.get(body.id) is None:
+    if job_service.get_job(body.id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    cancelled = await job_service.cancel(body.id)
-    if cancelled is None:
+    cancelled_job = await job_service.cancel_job(body.id)
+    if cancelled_job is None:
         raise HTTPException(status_code=409, detail="Job already finished")
 
-    return cancelled
+    return cancelled_job
 
 
 @router.post("/rescheduleJob", response_model=ScheduledJob)
 async def reschedule_job(body: RescheduleJobRequest, request: Request) -> ScheduledJob:
     job_service = _job_service_from_request(request)
 
-    if job_service.get(body.id) is None:
+    if job_service.get_job(body.id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    rescheduled = job_service.reschedule(body.id, scheduled_at=body.scheduled_at)
-    if rescheduled is None:
+    rescheduled_job = job_service.reschedule_job(
+        body.id, scheduled_at=body.scheduled_at
+    )
+    if rescheduled_job is None:
         raise HTTPException(status_code=409, detail="Job status is not scheduled")
 
-    return rescheduled
+    return rescheduled_job

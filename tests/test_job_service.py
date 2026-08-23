@@ -70,7 +70,7 @@ def test_create_job_persists_queued_job(
 
     # Assert
     assert job.status == JobStatus.queued
-    assert job_service.get(job.id) == job
+    assert job_service.get_job(job.id) == job
 
 
 def test_create_job_with_scheduled_at_persists_scheduled_job(
@@ -88,7 +88,7 @@ def test_create_job_with_scheduled_at_persists_scheduled_job(
     # Assert
     assert isinstance(job, ScheduledJob)
     assert job.scheduled_at == _SCHEDULED
-    assert job_service.get(job.id) == job
+    assert job_service.get_job(job.id) == job
 
 
 @pytest.mark.parametrize(
@@ -111,7 +111,7 @@ def test_create_job_rejects_when_unfinished_at_capacity(
         job_service.create_job("https://example.com/2")
 
 
-def test_reschedule_updates_scheduled_at(
+def test_reschedule_job_updates_scheduled_at(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
@@ -123,15 +123,15 @@ def test_reschedule_updates_scheduled_at(
     later = _SCHEDULED + timedelta(days=1)
 
     # Act
-    rescheduled = job_service.reschedule(job.id, scheduled_at=later)
+    rescheduled_job = job_service.reschedule_job(job.id, scheduled_at=later)
 
     # Assert
-    assert isinstance(rescheduled, ScheduledJob)
-    assert rescheduled.scheduled_at == later
-    assert job_service.get(job.id) == rescheduled
+    assert isinstance(rescheduled_job, ScheduledJob)
+    assert rescheduled_job.scheduled_at == later
+    assert job_service.get_job(job.id) == rescheduled_job
 
 
-def test_reschedule_returns_none_when_not_scheduled(
+def test_reschedule_job_returns_none_when_not_scheduled(
     make_job_service: Callable[..., JobService],
 ) -> None:
     # Arrange
@@ -139,8 +139,8 @@ def test_reschedule_returns_none_when_not_scheduled(
     job = job_service.create_job("https://example.com/video")
 
     # Act / Assert
-    assert job_service.reschedule(job.id, scheduled_at=_SCHEDULED) is None
-    assert isinstance(job_service.get(job.id), QueuedJob)
+    assert job_service.reschedule_job(job.id, scheduled_at=_SCHEDULED) is None
+    assert isinstance(job_service.get_job(job.id), QueuedJob)
 
 
 @pytest.mark.asyncio
@@ -159,8 +159,8 @@ async def test_try_start_jobs_starts_queued_up_to_max_running(
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(first_id), RunningJob)
-    assert isinstance(job_service.get(second_id), QueuedJob)
+    assert isinstance(job_service.get_job(first_id), RunningJob)
+    assert isinstance(job_service.get_job(second_id), QueuedJob)
     await job_service.shutdown()
 
 
@@ -182,8 +182,8 @@ async def test_try_start_jobs_after_shutdown_does_not_claim(
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(queued_id), QueuedJob)
-    assert isinstance(job_service.get(scheduled_id), ScheduledJob)
+    assert isinstance(job_service.get_job(queued_id), QueuedJob)
+    assert isinstance(job_service.get_job(scheduled_id), ScheduledJob)
 
 
 @pytest.mark.asyncio
@@ -258,7 +258,7 @@ async def test_try_start_jobs_starts_next_after_slot_frees(
 
     # Assert
     assert started == [first_id, second_id]
-    assert isinstance(job_service.get(second_id), RunningJob)
+    assert isinstance(job_service.get_job(second_id), RunningJob)
     await job_service.shutdown()
 
 
@@ -287,8 +287,8 @@ async def test_try_start_jobs_starts_due_scheduled_ignoring_max_running(
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(queued_id), ImmediateRunningJob)
-    assert isinstance(job_service.get(scheduled_id), ScheduledRunningJob)
+    assert isinstance(job_service.get_job(queued_id), ImmediateRunningJob)
+    assert isinstance(job_service.get_job(scheduled_id), ScheduledRunningJob)
     await job_service.shutdown()
 
 
@@ -316,8 +316,8 @@ async def test_try_start_jobs_prefers_due_scheduled_over_queued(
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(scheduled_id), ScheduledRunningJob)
-    assert isinstance(job_service.get(queued_id), QueuedJob)
+    assert isinstance(job_service.get_job(scheduled_id), ScheduledRunningJob)
+    assert isinstance(job_service.get_job(queued_id), QueuedJob)
     await job_service.shutdown()
 
 
@@ -336,7 +336,7 @@ def test_try_start_jobs_skips_scheduled_when_not_due(
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(job_id), ScheduledJob)
+    assert isinstance(job_service.get_job(job_id), ScheduledJob)
 
 
 @pytest.mark.asyncio
@@ -370,7 +370,7 @@ async def test_try_start_jobs_starts_restored_past_scheduled(
     job_service.try_start_jobs()
 
     # Assert
-    assert isinstance(job_service.get(JobId("restored")), ScheduledRunningJob)
+    assert isinstance(job_service.get_job(JobId("restored")), ScheduledRunningJob)
     await job_service.shutdown()
 
 
@@ -394,12 +394,12 @@ async def test_cancel_unstarted_job_marks_cancelled(
     )
 
     # Act
-    cancelled = await job_service.cancel(job.id)
+    cancelled_job = await job_service.cancel_job(job.id)
 
     # Assert
-    assert cancelled is not None
-    assert cancelled.status == JobStatus.cancelled
-    assert job_service.get(job.id) == cancelled
+    assert cancelled_job is not None
+    assert cancelled_job.status == JobStatus.cancelled
+    assert job_service.get_job(job.id) == cancelled_job
 
 
 @pytest.mark.asyncio
@@ -427,12 +427,12 @@ async def test_cancel_running_job_marks_cancelled(
     await job_began.wait()
 
     # Act
-    cancelled = await job_service.cancel(job_id)
+    cancelled_job = await job_service.cancel_job(job_id)
 
     # Assert
-    assert cancelled is not None
-    assert cancelled.status == JobStatus.cancelled
-    assert isinstance(job_service.get(job_id), CancelledJob)
+    assert cancelled_job is not None
+    assert cancelled_job.status == JobStatus.cancelled
+    assert isinstance(job_service.get_job(job_id), CancelledJob)
     assert process_task_cancelled.is_set()
     await job_service.shutdown()
 
@@ -465,15 +465,15 @@ async def test_cancel_finished_job_returns_none(tmp_path: Path) -> None:
         )
 
         # Act
-        cancelled = await job_service.cancel(job_id)
+        cancelled_job = await job_service.cancel_job(job_id)
 
     # Assert
-    assert cancelled is None
+    assert cancelled_job is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("running", "expected"),
+    ("running_job", "expected"),
     [
         (
             ImmediateRunningJob(
@@ -509,14 +509,14 @@ async def test_cancel_finished_job_returns_none(tmp_path: Path) -> None:
 )
 async def test_restore_waiting_jobs_from_running(
     tmp_path: Path,
-    running: RunningJob,
+    running_job: RunningJob,
     expected: QueuedJob | ScheduledJob,
 ) -> None:
     # Arrange
     db_path = tmp_path / "jobs.sqlite3"
 
     with JobStore(max_jobs=10, database_path=db_path, max_log_lines=100) as store:
-        store.save_metadata(running)
+        store.save_metadata(running_job)
         job_service = JobService(
             store,
             max_running=0,
@@ -527,4 +527,4 @@ async def test_restore_waiting_jobs_from_running(
         job_service.restore_waiting_jobs()
 
         # Assert
-        assert job_service.get(running.id) == expected
+        assert job_service.get_job(running_job.id) == expected

@@ -143,10 +143,10 @@ async def test_process_job_marks_succeeded_on_zero_exit(
     await process_job(job_service, job_id, output_dir="/out")
 
     # Assert
-    finished = job_service.get(job_id)
-    assert isinstance(finished, SucceededJob)
-    assert finished.status == JobStatus.succeeded
-    assert finished.exit_code == 0
+    finished_job = job_service.get_job(job_id)
+    assert isinstance(finished_job, SucceededJob)
+    assert finished_job.status == JobStatus.succeeded
+    assert finished_job.exit_code == 0
 
 
 @pytest.mark.asyncio
@@ -177,10 +177,10 @@ async def test_process_job_appends_stdout_and_stderr_to_log(
     await process_job(job_service, job_id, output_dir="/out")
 
     # Assert
-    finished = job_service.get(job_id)
-    assert isinstance(finished, SucceededJob)
-    assert "hello-stdout\n" in finished.log.lines
-    assert "hello-stderr\n" in finished.log.lines
+    finished_job = job_service.get_job(job_id)
+    assert isinstance(finished_job, SucceededJob)
+    assert "hello-stdout\n" in finished_job.log.lines
+    assert "hello-stderr\n" in finished_job.log.lines
 
 
 @pytest.mark.asyncio
@@ -207,11 +207,11 @@ async def test_process_job_marks_failed_on_nonzero_exit(
     await process_job(job_service, job_id, output_dir="/out")
 
     # Assert
-    finished = job_service.get(job_id)
-    assert isinstance(finished, FailedJob)
-    assert finished.status == JobStatus.failed
-    assert finished.exit_code == 1
-    assert finished.error is not None
+    finished_job = job_service.get_job(job_id)
+    assert isinstance(finished_job, FailedJob)
+    assert finished_job.status == JobStatus.failed
+    assert finished_job.exit_code == 1
+    assert finished_job.error is not None
 
 
 @pytest.mark.asyncio
@@ -245,9 +245,9 @@ async def test_process_job_on_task_cancel_kills_proc_and_keeps_running(
         await task
 
     # Assert
-    current = job_service.get(job_id)
-    assert isinstance(current, RunningJob)
-    assert current.status == JobStatus.running
+    current_job = job_service.get_job(job_id)
+    assert isinstance(current_job, RunningJob)
+    assert current_job.status == JobStatus.running
     assert proc.killed
 
 
