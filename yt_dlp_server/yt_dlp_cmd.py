@@ -48,12 +48,14 @@ def build_yt_dlp_cmd(
     # Official recommendation: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
     # Unset leaves yt-dlp defaults (no these extractor-args).
     if pot_base_url:
+        # bgutil concatenates `{base_url}/ping`; AnyHttpUrl str() keeps a
+        # trailing slash, which would request `//ping` and 404.
         cmd.extend(
             (
                 "--extractor-args",
                 "youtube:player_client=mweb",
                 "--extractor-args",
-                f"youtubepot-bgutilhttp:base_url={pot_base_url}",
+                f"youtubepot-bgutilhttp:base_url={pot_base_url.rstrip('/')}",
             )
         )
 
