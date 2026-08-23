@@ -1,3 +1,19 @@
+# Not copied into later stages yet, so BuildKit skips this stage.
+FROM ghcr.io/pnpm/pnpm:11 AS ui-builder
+
+RUN pnpm runtime set node 22 -g
+
+WORKDIR /ui
+
+COPY ui/package.json ui/pnpm-lock.yaml ./
+
+RUN pnpm fetch
+
+COPY ui ./
+
+RUN pnpm install --frozen-lockfile --offline
+RUN pnpm run build
+
 FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
 
 WORKDIR /workdir

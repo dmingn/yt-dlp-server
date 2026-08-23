@@ -59,6 +59,22 @@ lint:
 typecheck:
 	uv run mypy .
 
+.PHONY: ui-install
+ui-install:
+	cd ui && pnpm install --frozen-lockfile
+
+.PHONY: ui-lint
+ui-lint: ui-install
+	cd ui && pnpm run lint
+
+.PHONY: ui-typecheck
+ui-typecheck: ui-install
+	cd ui && pnpm run typecheck
+
+.PHONY: ui-build
+ui-build: ui-install
+	cd ui && pnpm run build
+
 .PHONY: playwright-install
 playwright-install:
 	uv run playwright install --with-deps chromium
@@ -68,4 +84,4 @@ test:
 	uv run python -m pytest -q
 
 .PHONY: check
-check: lint typecheck test
+check: lint typecheck ui-lint ui-typecheck ui-build test

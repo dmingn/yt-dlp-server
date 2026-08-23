@@ -12,3 +12,5 @@ out
 tests
 *.md
 .python-version
+ui/node_modules
+ui/dist
