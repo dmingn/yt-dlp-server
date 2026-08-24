@@ -36,6 +36,7 @@ Default is 1 concurrent download (`MAX_RUNNING`).
 ## Local development
 
 ```bash
+mkdir -p ui/dist
 uv sync
 make ui-build
 mkdir -p out data
