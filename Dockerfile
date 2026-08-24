@@ -1,4 +1,3 @@
-# Not copied into later stages yet, so BuildKit skips this stage.
 FROM ghcr.io/pnpm/pnpm:11 AS ui-builder
 
 RUN pnpm runtime set node 22 -g
@@ -26,6 +25,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
 COPY yt_dlp_server ./yt_dlp_server
+COPY --from=ui-builder /ui/dist ./ui/dist
 
 RUN uv sync --locked --no-dev --no-editable
 

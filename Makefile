@@ -74,14 +74,17 @@ ui-typecheck: ui-install
 .PHONY: ui-build
 ui-build: ui-install
 	cd ui && pnpm run build
+	rm -rf yt_dlp_server/static
+	mkdir -p yt_dlp_server/static
+	cp -a ui/dist/. yt_dlp_server/static/
 
 .PHONY: playwright-install
 playwright-install:
 	uv run playwright install --with-deps chromium
 
 .PHONY: test
-test:
+test: ui-build
 	uv run python -m pytest -q
 
 .PHONY: check
-check: lint typecheck ui-lint ui-typecheck ui-build test
+check: lint typecheck ui-lint ui-typecheck test

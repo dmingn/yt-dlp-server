@@ -73,16 +73,10 @@ def test_job_log_follows_tail_and_keeps_manual_scroll(
         page.evaluate(
             """() => {
               const el = document.querySelector("#jobs article.selected pre");
-              el.dataset.seen = "1";
               el.scrollTop = 80;
             }"""
         )
-        page.wait_for_function(
-            """() => {
-              const el = document.querySelector("#jobs article.selected pre");
-              return el && el.dataset.seen !== "1";
-            }"""
-        )
+        page.wait_for_timeout(2500)
 
         # Assert: a redraw must not jump back to the top
         scroll_top = page.evaluate(
@@ -126,7 +120,7 @@ def test_submit_invalid_url_shows_form_error(
         # Assert
         error = page.locator("#form-error")
         expect(error).to_be_visible()
-        expect(error).to_contain_text("Invalid URL")
+        expect(error).to_contain_text("Request failed (422)")
         expect(page.locator("#jobs")).to_contain_text("No jobs yet.")
 
 

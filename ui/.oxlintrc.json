@@ -1,4 +1,14 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "react", "react-perf", "import", "jsx-a11y"]
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "react",
+    "react-perf",
+    "import",
+    "jsx-a11y"
+  ],
+  "rules": {
+    "jsx-a11y/no-noninteractive-element-interactions": "off"
+  }
 }

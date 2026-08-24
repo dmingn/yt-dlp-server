@@ -64,8 +64,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/")
     async def index() -> HTMLResponse:
-        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        return HTMLResponse(html.replace("__VERSION__", get_version(), 1))
+        index_path = STATIC_DIR / "index.html"
+        try:
+            html = index_path.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise RuntimeError("UI is not built. Run `make ui-build`.") from exc
+        return HTMLResponse(html.replace("%%APP_VERSION%%", get_version(), 1))
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

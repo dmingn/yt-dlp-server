@@ -14,3 +14,4 @@ tests
 .python-version
 ui/node_modules
 ui/dist
+yt_dlp_server/static
