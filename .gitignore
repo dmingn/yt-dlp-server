@@ -220,4 +220,4 @@ __marimo__/
 .streamlit/secrets.toml
 
 node_modules/
-yt_dlp_server/static/
+ui/dist/

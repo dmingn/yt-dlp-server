@@ -74,9 +74,6 @@ ui-typecheck: ui-install
 .PHONY: ui-build
 ui-build: ui-install
 	cd ui && pnpm run build
-	rm -rf yt_dlp_server/static
-	mkdir -p yt_dlp_server/static
-	cp -a ui/dist/. yt_dlp_server/static/
 
 .PHONY: playwright-install
 playwright-install:

@@ -14,10 +14,15 @@ from yt_dlp_server.process_job import process_job
 from yt_dlp_server.settings import Settings
 from yt_dlp_server.version import get_version
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+UI_DIR = Path("ui/dist")
+_UI_NOT_BUILT = "UI is not built. Run `make ui-build`."
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    ui_dir: Path = UI_DIR,
+) -> FastAPI:
     settings = settings or Settings()
 
     if settings.umask is not None:
@@ -64,14 +69,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/")
     async def index() -> HTMLResponse:
-        index_path = STATIC_DIR / "index.html"
         try:
-            html = index_path.read_text(encoding="utf-8")
+            html = (ui_dir / "index.html").read_text(encoding="utf-8")
         except FileNotFoundError as exc:
-            raise RuntimeError("UI is not built. Run `make ui-build`.") from exc
+            raise RuntimeError(_UI_NOT_BUILT) from exc
         return HTMLResponse(html.replace("%%APP_VERSION%%", get_version(), 1))
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    try:
+        static_files = StaticFiles(directory=ui_dir)
+    except RuntimeError as exc:
+        raise RuntimeError(_UI_NOT_BUILT) from exc
+    app.mount("/static", static_files, name="static")
     return app
 
 

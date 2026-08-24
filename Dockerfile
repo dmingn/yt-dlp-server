@@ -25,7 +25,6 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
 COPY yt_dlp_server ./yt_dlp_server
-COPY --from=ui-builder /ui/dist ./ui/dist
 
 RUN uv sync --locked --no-dev --no-editable
 
@@ -57,6 +56,7 @@ WORKDIR /workdir
 COPY --from=ffmpeg-downloader --chown=appuser:appgroup /workdir/ffmpeg/bin /usr/local/bin
 
 COPY --from=builder --chown=appuser:appgroup /workdir/.venv /workdir/.venv
+COPY --from=ui-builder --chown=appuser:appgroup /ui/dist /workdir/ui/dist
 
 ENV PATH="/workdir/.venv/bin:$PATH"
 

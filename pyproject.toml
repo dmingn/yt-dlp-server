@@ -25,9 +25,6 @@ fallback_version = "0.0.0"
 [tool.hatch.build.targets.wheel]
 packages = ["yt_dlp_server"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"ui/dist" = "yt_dlp_server/static"
-
 [tool.ruff]
 line-length = 88
 target-version = "py314"
