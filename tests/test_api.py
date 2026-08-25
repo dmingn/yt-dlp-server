@@ -65,8 +65,8 @@ def test_index_shows_package_version(client: TestClient) -> None:
 
     # Assert
     assert response.status_code == 200
-    assert f">{get_version()}</span>" in response.text
-    assert "__VERSION__" not in response.text
+    assert f'window.__APP_VERSION__ = "{get_version()}";' in response.text
+    assert "%%APP_VERSION%%" not in response.text
 
 
 def test_create_job_returns_201(client: TestClient) -> None:

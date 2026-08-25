@@ -1,4 +1,3 @@
-# Not copied into later stages yet, so BuildKit skips this stage.
 FROM ghcr.io/pnpm/pnpm:11 AS ui-builder
 
 RUN pnpm runtime set node 22 -g
@@ -57,6 +56,7 @@ WORKDIR /workdir
 COPY --from=ffmpeg-downloader --chown=appuser:appgroup /workdir/ffmpeg/bin /usr/local/bin
 
 COPY --from=builder --chown=appuser:appgroup /workdir/.venv /workdir/.venv
+COPY --from=ui-builder --chown=appuser:appgroup /ui/dist /workdir/ui/dist
 
 ENV PATH="/workdir/.venv/bin:$PATH"
 
