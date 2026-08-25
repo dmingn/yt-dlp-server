@@ -37,9 +37,12 @@ Default is 1 concurrent download (`MAX_RUNNING`).
 
 ```bash
 uv sync
+make ui-build
 mkdir -p out data
 OUTPUT_DIR=./out DATABASE_PATH=./data/jobs.sqlite3 uv run python -m yt_dlp_server
 ```
+
+Front-end HMR: run the API as above, then `pnpm --dir ui dev` and open the Vite URL (it proxies `/api`).
 
 To enable the same PO Token setup locally, run a bgutil provider (for example `docker run --rm -p 4416:4416 brainicism/bgutil-ytdlp-pot-provider:1.3.2`) and set `POT_BASE_URL=http://127.0.0.1:4416`.
 

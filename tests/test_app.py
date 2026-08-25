@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from yt_dlp_server.app import create_app
 from yt_dlp_server.settings import Settings
@@ -42,3 +43,30 @@ def test_create_app_umask(
     # Assert
     current = os.umask(restore_umask)
     assert current == expected
+
+
+def test_create_app_raises_when_ui_dir_missing(tmp_path: Path) -> None:
+    # Arrange
+    settings = Settings(database_path=tmp_path / "jobs.sqlite3")
+    ui_dir = tmp_path / "missing"
+
+    # Act / Assert
+    with pytest.raises(RuntimeError, match=r"Run `make ui-build`"):
+        create_app(settings, ui_dir=ui_dir)
+
+
+def test_index_raises_when_index_html_missing(tmp_path: Path) -> None:
+    # Arrange
+    ui_dir = tmp_path / "dist"
+    ui_dir.mkdir()
+    app = create_app(
+        Settings(database_path=tmp_path / "jobs.sqlite3"),
+        ui_dir=ui_dir,
+    )
+
+    # Act / Assert
+    with (
+        TestClient(app, raise_server_exceptions=True) as client,
+        pytest.raises(RuntimeError, match=r"Run `make ui-build`"),
+    ):
+        client.get("/")

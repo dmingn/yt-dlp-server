@@ -80,8 +80,8 @@ playwright-install:
 	uv run playwright install --with-deps chromium
 
 .PHONY: test
-test:
+test: ui-build
 	uv run python -m pytest -q
 
 .PHONY: check
-check: lint typecheck ui-lint ui-typecheck ui-build test
+check: lint typecheck ui-lint ui-typecheck test
