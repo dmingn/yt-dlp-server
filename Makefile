@@ -77,7 +77,7 @@ ui-build: ui-install
 
 .PHONY: playwright-install
 playwright-install:
-	uv run playwright install --with-deps chromium
+	uv run playwright install chromium
 
 .PHONY: test
 test: ui-build

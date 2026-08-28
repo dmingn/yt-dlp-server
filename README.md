@@ -51,6 +51,8 @@ make playwright-install  # once, for UI tests
 make check
 ```
 
+On Linux, Playwright may require additional system libraries; see [Install system dependencies](https://playwright.dev/docs/browsers#install-system-dependencies).
+
 ## Release
 
 The package version comes from Git tags (hatch-vcs).
