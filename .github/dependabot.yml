@@ -23,7 +23,7 @@ updates:
           - "minor"
           - "patch"
         exclude-patterns:
-          - "yt-dlp"
+          - "yt-dlp*"
   - package-ecosystem: "npm"
     directory: "/ui"
     schedule:
