@@ -28,6 +28,10 @@ updates:
     directory: "/ui"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       minor-and-patch:
         patterns:
