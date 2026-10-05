@@ -24,6 +24,10 @@ updates:
           - "patch"
         exclude-patterns:
           - "yt-dlp*"
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
   - package-ecosystem: "npm"
     directory: "/ui"
     schedule:
