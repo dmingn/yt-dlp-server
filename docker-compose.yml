@@ -1,6 +1,6 @@
 services:
   pot-provider:
-    image: brainicism/bgutil-ytdlp-pot-provider:2.0.0
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.1
     init: true
     restart: unless-stopped
     healthcheck:
