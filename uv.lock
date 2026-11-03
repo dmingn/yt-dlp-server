@@ -166,11 +166,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.10.18"
+version = "2026.10.23"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7e/eb/a2aa1ac3ea30dd3f30ca57f40232138b6b0040719316ecb85daf61167771/certifi-2026.10.18.tar.gz", hash = "sha256:b9995d97b64d0431a5af837d8ca8cd6238104d1f319f04bd93ea43124d6c861e", size = 135227, upload-time = "2026-10-18T16:21:07.655Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/11/b524cbd9bbdaca58608e4cf4053fd463417549e1959fa8d3aa18319f9555/certifi-2026.10.23.tar.gz", hash = "sha256:a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd", size = 136225, upload-time = "2026-10-23T11:36:16.478Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/ba/95dd616042484f7c83a06974388b37b837732740ee70bc5dc715b5fcd55a/certifi-2026.10.18-py3-none-any.whl", hash = "sha256:73191c47aaa79da394e8fee2dbc2ec827432cab56311122c9e47abf79e390f62", size = 134093, upload-time = "2026-10-18T16:21:06.276Z" },
+    { url = "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl", hash = "sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1", size = 135082, upload-time = "2026-10-23T11:36:14.763Z" },
 ]
 
 [[package]]
@@ -290,15 +290,15 @@ wheels = [
 
 [[package]]
 name = "deno"
-version = "2.9.4"
+version = "2.9.8"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/41/65/5c2b5f7200f73f894f593924ceb2587f72921856633a6872a0e65838a086/deno-2.9.4.tar.gz", hash = "sha256:7a1e8c13ff875ab9fce9ef46a7a3e57f2e88ed913f12e9573774f2e13bc655cd", size = 8167, upload-time = "2026-07-23T17:03:17.114Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/b9/695b7c6b1f8bf31a83a403b785f9f31a8354c08796acb3a5e387c2813954/deno-2.9.8.tar.gz", hash = "sha256:f050f14d259f1e6f39a86aa8dd85f787df2311fc8ceb0be57485a127567ae137", size = 8168, upload-time = "2026-10-21T15:32:03.155Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/81/af65625100a206af5c41cef87261b45f02dca1276d067778d6c94f41f884/deno-2.9.4-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:b28fb101c676827361cf16b8056cab4a245c2fc0403a470b1ef505fa5ab3ebc2", size = 42253165, upload-time = "2026-07-23T17:02:58.945Z" },
-    { url = "https://files.pythonhosted.org/packages/dc/01/4341080e37b433f83a0b3721b8d412cd2df1d2e8bb83ec21d5a784e84038/deno-2.9.4-py3-none-macosx_11_0_arm64.whl", hash = "sha256:0bf192f7b2801ea1ecacaefec31d64b70aa7725c8f7ae1ae5e9caadf10934e4e", size = 37852489, upload-time = "2026-07-23T17:03:02.386Z" },
-    { url = "https://files.pythonhosted.org/packages/28/67/fe20c2a97eaf9a0bd4039bc6891ecdcc42e7882e2cfce88788e2118ca1fc/deno-2.9.4-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:31c9d8e88fc47076601d84a9eec6da3516aadffe1dececc41e4f95c2368176c0", size = 41975689, upload-time = "2026-07-23T17:03:05.847Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/78/2fdff277226b744dd6e9377d6bcc99e0103413d98c4c29beccad3a288bb3/deno-2.9.4-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:cff3d7da3aaf12b71747e13d6a43ccc4c684301cff211ca6563836b4e45d1490", size = 43826629, upload-time = "2026-07-23T17:03:10.119Z" },
-    { url = "https://files.pythonhosted.org/packages/82/47/8dd9fbf96c70751a3cd8e4d4bcc73c6aef9375e6f7909d7e809020a26c60/deno-2.9.4-py3-none-win_amd64.whl", hash = "sha256:c13b5e6e52b6facccccdbf62f0f23354616b0f2fe95d2c935491dbb749986dbb", size = 41516521, upload-time = "2026-07-23T17:03:14.189Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/b1/ed2631d14362b442854a14efc5e3ac1b3422e6544734b2d746114f874acf/deno-2.9.8-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:338245af268724ae55ebebdb81270a0553b665affde8bdd80b01b8f1c07c7163", size = 42807330, upload-time = "2026-10-21T15:31:44.653Z" },
+    { url = "https://files.pythonhosted.org/packages/67/d7/78ae96540972c31d5787ab454af58a30a52ec35984bc4143b19f4175707d/deno-2.9.8-py3-none-macosx_11_0_arm64.whl", hash = "sha256:b82eac91d3e3f6fe37d94a12f833550e05029274cb9020b1e3f0f61e1678dc24", size = 38783813, upload-time = "2026-10-21T15:31:48.542Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/01/4a71078d8007c04f36b7306a0e9838e43a6e0c56d48f947040b779d469d1/deno-2.9.8-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:3e286918a36f436134336c5c6ef37dfe3a27f16ea22cd6af452ab7daa4ef1da4", size = 40125945, upload-time = "2026-10-21T15:31:52.352Z" },
+    { url = "https://files.pythonhosted.org/packages/76/21/16d41da4c0c1c966d85fbfc5af6e2ea5e55eb9aadce00b82810875fe11d0/deno-2.9.8-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:b1d1318e7deda8efd593aefa8b565a827fe71cf83aeff09d3a5ceb047444ca18", size = 41964284, upload-time = "2026-10-21T15:31:56.477Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/42/07b0f91b0962869218653e32a85aebf22fc359a146d8c032623994b9457f/deno-2.9.8-py3-none-win_amd64.whl", hash = "sha256:60dd97e612b8bab67c8080712646a821071e3809909489f853763cea19617700", size = 41825460, upload-time = "2026-10-21T15:32:00.7Z" },
 ]
 
 [[package]]
@@ -1067,11 +1067,11 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.8.19"
+version = "2026.10.26"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1e/e0/832fa4ca334b766a06933a196066edc3dba37cdb6f14cd98d59bcc69a4b4/yt_dlp-2026.8.19.tar.gz", hash = "sha256:9e213e48cea35c66b378e4447903f118f6392a5fa380a2b6d7070ec86f4e0af1", size = 3052025, upload-time = "2026-08-19T23:48:59.291Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/31/4be3987022a6244550ab6a3afe45ad10ac10b5e5ab8874bd8eecc7f8b937/yt_dlp-2026.10.26.tar.gz", hash = "sha256:abe5c6b94c3b2f0560500add1c42e0a97641752743a5b65588ac2007a6e23eb6", size = 3048880, upload-time = "2026-10-26T22:25:26.931Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/b2/8cd1613f56eed7ceb64fbd4df3f1c01246bfb098e6f398228bafda22b80b/yt_dlp-2026.8.19-py3-none-any.whl", hash = "sha256:1d57897e94c6665a0a6f9bc54b34e584284e32c034ffab3a7df25d8f7b24eedf", size = 3185533, upload-time = "2026-08-19T23:48:56.925Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/3d/16ea7d5638cf585991f2c5705e8083688dde633d32d0871f2404e0f4d827/yt_dlp-2026.10.26-py3-none-any.whl", hash = "sha256:a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae", size = 3186201, upload-time = "2026-10-26T22:25:24.877Z" },
 ]
 
 [package.optional-dependencies]
