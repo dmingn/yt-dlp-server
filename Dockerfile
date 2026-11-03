@@ -1,4 +1,4 @@
-FROM ghcr.io/pnpm/pnpm:11 AS ui-builder
+FROM --platform=$BUILDPLATFORM ghcr.io/pnpm/pnpm:11 AS ui-builder
 
 RUN pnpm runtime set node 22 -g
 
@@ -28,7 +28,7 @@ COPY yt_dlp_server ./yt_dlp_server
 
 RUN uv sync --locked --no-dev --no-editable
 
-FROM alpine:latest AS ffmpeg-downloader
+FROM --platform=$BUILDPLATFORM alpine:latest AS ffmpeg-downloader
 
 WORKDIR /workdir
 
